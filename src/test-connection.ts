@@ -2,10 +2,10 @@
 
 /**
  * Test script for Milestone 1: Connect to Chrome and return active tab URL
- * 
+ *
  * Run this script to verify that TabNab can successfully connect to Chrome
  * and retrieve the active tab's URL and title.
- * 
+ *
  * Prerequisites:
  * 1. Chrome must be running with --remote-debugging-port=9222
  * 2. At least one tab must be open in Chrome

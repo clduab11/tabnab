@@ -102,6 +102,15 @@ export class MCPTools {
 
     try {
       await page.waitForSelector(validated.selector, { timeout: 5000 });
+
+      // Clear existing content before typing
+      await page.$eval(validated.selector, (el) => {
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+          el.value = '';
+        }
+      });
+
+      // Type the new value
       await page.type(validated.selector, validated.value);
 
       return {

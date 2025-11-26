@@ -1,25 +1,7 @@
+import { Readability } from '@mozilla/readability';
+import { JSDOM } from 'jsdom';
 import type { Page } from 'puppeteer-core';
 import TurndownService from 'turndown';
-
-// Readability.js content extraction script
-const READABILITY_SCRIPT = `
-(function() {
-  // Simplified Readability.js implementation
-  function getArticleContent() {
-    const article = document.querySelector('article') || document.body;
-    return article.innerHTML;
-  }
-  
-  function getPageTitle() {
-    return document.title;
-  }
-  
-  return {
-    title: getPageTitle(),
-    content: getArticleContent()
-  };
-})();
-`;
 
 export interface ExtractedContent {
   title: string;
@@ -46,18 +28,36 @@ export class MarkdownExtractor {
 
   async extractFromPage(page: Page): Promise<ExtractedContent> {
     const url = page.url();
+    const html = await page.content();
 
-    // Execute Readability-like extraction
-    const extracted = (await page.evaluate(READABILITY_SCRIPT)) as {
-      title: string;
-      content: string;
-    };
+    // Use Mozilla's Readability to extract the main content
+    const dom = new JSDOM(html, { url });
+    const reader = new Readability(dom.window.document);
+    const article = reader.parse();
 
-    // Convert HTML to Markdown
-    const markdown = this.turndown.turndown(extracted.content);
+    if (!article) {
+      // Fallback to basic extraction if Readability fails
+      const title = await page.title();
+      const bodyHtml = (await page.evaluate(() => {
+        const article = document.querySelector('article');
+        const main = document.querySelector('main');
+        const content = article || main || document.body;
+        return content.innerHTML;
+      })) as string;
+
+      const markdown = this.turndown.turndown(bodyHtml);
+      return {
+        title,
+        markdown: markdown.trim(),
+        url,
+      };
+    }
+
+    // Convert the extracted HTML to Markdown
+    const markdown = this.turndown.turndown(article.content || '');
 
     return {
-      title: extracted.title,
+      title: article.title || 'Untitled',
       markdown: markdown.trim(),
       url,
     };
