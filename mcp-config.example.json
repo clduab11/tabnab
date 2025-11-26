@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tabnab": {
+      "command": "node",
+      "args": ["/absolute/path/to/tabnab/dist/mcp/index.js"],
+      "env": {
+        "CHROME_DEBUG_PORT": "9222"
+      }
+    }
+  }
+}
