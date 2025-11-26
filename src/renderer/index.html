@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>TabNab - Browser Bridge</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #333;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #4285f4;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #666;
+    }
+
+    .status-dot.connected {
+      background: #34a853;
+      box-shadow: 0 0 8px #34a853;
+    }
+
+    .status-dot.disconnected {
+      background: #ea4335;
+    }
+
+    .status-text {
+      font-size: 0.875rem;
+      color: #aaa;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button.primary {
+      background: #4285f4;
+      color: white;
+    }
+
+    button.primary:hover {
+      background: #3367d6;
+    }
+
+    button.secondary {
+      background: #333;
+      color: #eee;
+    }
+
+    button.secondary:hover {
+      background: #444;
+    }
+
+    .config-section {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+
+    .config-section h2 {
+      font-size: 1rem;
+      margin-bottom: 10px;
+      color: #888;
+    }
+
+    .config-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .config-item label {
+      font-size: 0.875rem;
+    }
+
+    .config-item input {
+      background: #1a1a2e;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 6px 10px;
+      color: #eee;
+      width: 100px;
+      text-align: right;
+    }
+
+    .logs-section {
+      background: #0f0f23;
+      border-radius: 8px;
+      padding: 15px;
+      flex: 1;
+    }
+
+    .logs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .logs-header h2 {
+      font-size: 1rem;
+      color: #888;
+    }
+
+    .logs-container {
+      height: 200px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .log-entry {
+      padding: 2px 0;
+      border-bottom: 1px solid #1a1a2e;
+    }
+
+    .log-entry .timestamp {
+      color: #666;
+      margin-right: 8px;
+    }
+
+    .log-entry.info .level {
+      color: #4285f4;
+    }
+
+    .log-entry.warn .level {
+      color: #fbbc04;
+    }
+
+    .log-entry.error .level {
+      color: #ea4335;
+    }
+
+    .log-entry .message {
+      color: #ccc;
+    }
+
+    .help-section {
+      margin-top: 20px;
+      padding: 15px;
+      background: #16213e;
+      border-radius: 8px;
+      font-size: 0.875rem;
+    }
+
+    .help-section h3 {
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .help-section code {
+      background: #1a1a2e;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+
+    .help-section pre {
+      background: #0f0f23;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 8px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>TabNab</h1>
+    <div class="status">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">Checking...</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="connectBtn">Connect</button>
+    <button class="secondary" id="disconnectBtn">Disconnect</button>
+  </div>
+
+  <div class="config-section">
+    <h2>Configuration</h2>
+    <div class="config-item">
+      <label>Chrome Debug Port</label>
+      <input type="number" id="portInput" value="9222">
+    </div>
+  </div>
+
+  <div class="logs-section">
+    <div class="logs-header">
+      <h2>Logs</h2>
+      <button class="secondary" id="clearLogsBtn">Clear</button>
+    </div>
+    <div class="logs-container" id="logsContainer"></div>
+  </div>
+
+  <div class="help-section">
+    <h3>Getting Started</h3>
+    <p>Start Chrome with remote debugging enabled:</p>
+    <pre><code>google-chrome --remote-debugging-port=9222</code></pre>
+    <p style="margin-top: 10px; color: #888;">
+      Or on macOS: <code>/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222</code>
+    </p>
+  </div>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>

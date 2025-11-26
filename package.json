@@ -1,0 +1,62 @@
+{
+  "name": "tabnab",
+  "version": "0.1.0",
+  "description": "Local MCP server that gives AI agents access to your authenticated browser sessions",
+  "main": "dist/main/index.js",
+  "author": "TabNab",
+  "license": "MIT",
+  "scripts": {
+    "dev": "npm run build && electron .",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "start": "electron .",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --apply src/",
+    "format": "biome format --write src/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "mcp:stdio": "node dist/mcp/server.js",
+    "package:mac": "electron-builder --mac",
+    "package:win": "electron-builder --win"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@mozilla/readability": "^0.5.0",
+    "jsdom": "^24.1.0",
+    "puppeteer-core": "^22.15.0",
+    "turndown": "^7.2.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.8.3",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20.14.12",
+    "@types/turndown": "^5.0.5",
+    "electron": "^33.0.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.4"
+  },
+  "build": {
+    "appId": "com.tabnab.app",
+    "productName": "TabNab",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "icon": "assets/icon.png"
+    }
+  }
+}

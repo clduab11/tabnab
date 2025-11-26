@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tabnab": {
+      "command": "node",
+      "args": [
+        "/path/to/tabnab/dist/mcp/server.js"
+      ],
+      "env": {}
+    }
+  }
+}
