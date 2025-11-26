@@ -22,6 +22,20 @@ Local MCP server that gives AI agents (Claude, Cursor, Windsurf) access to your 
 
 ### Starting Chrome with Remote Debugging
 
+TabNab includes helper scripts to start Chrome with remote debugging enabled:
+
+**macOS/Linux:**
+```bash
+./start-chrome.sh
+```
+
+**Windows:**
+```powershell
+.\start-chrome.ps1
+```
+
+Or start Chrome manually:
+
 **macOS:**
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
@@ -40,6 +54,10 @@ google-chrome --remote-debugging-port=9222
 ## Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/clduab11/tabnab.git
+cd tabnab
+
 # Install dependencies
 pnpm install
 
@@ -47,22 +65,51 @@ pnpm install
 pnpm run build
 ```
 
+## Quick Start
+
+1. **Start Chrome with remote debugging:**
+   ```bash
+   ./start-chrome.sh  # macOS/Linux
+   # or
+   .\start-chrome.ps1  # Windows
+   ```
+
+2. **Test the connection (Milestone 1):**
+   ```bash
+   pnpm run test:milestone1
+   ```
+   
+   This will verify that TabNab can connect to Chrome and retrieve the active tab URL.
+
+3. **Configure MCP client** (see Usage section below)
+
 ## Usage
 
 ### As an MCP Server
 
-Add TabNab to your MCP client configuration (e.g., Claude Desktop):
+Add TabNab to your MCP client configuration (e.g., Claude Desktop).
 
+**Configuration File Location:**
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+
+**Configuration:**
 ```json
 {
   "mcpServers": {
     "tabnab": {
       "command": "node",
-      "args": ["/path/to/tabnab/dist/mcp/index.js"]
+      "args": ["/absolute/path/to/tabnab/dist/mcp/index.js"],
+      "env": {
+        "CHROME_DEBUG_PORT": "9222"
+      }
     }
   }
 }
 ```
+
+See `mcp-config.example.json` for a complete example.
 
 ### As a Standalone Electron App
 
