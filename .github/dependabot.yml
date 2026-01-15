@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # npm/pnpm dependencies
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    groups:
+      # Group minor and patch updates
+      dependencies:
+        patterns:
+          - '*'
+        exclude-patterns:
+          - 'electron'
+          - 'typescript'
+        update-types:
+          - 'minor'
+          - 'patch'
+    commit-message:
+      prefix: 'deps'
+      include: 'scope'
+    labels:
+      - 'dependencies'
+      - 'automated'
+
+  # GitHub Actions updates
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'ci'
+      include: 'scope'
+    labels:
+      - 'ci'
+      - 'automated'
