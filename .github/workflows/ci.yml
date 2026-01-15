@@ -26,7 +26,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -50,7 +50,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -68,17 +68,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: ['18', '20', '22']
+        node-version: ['22', '23']
         exclude:
-          # Reduce matrix size - test Node 18 and 22 only on ubuntu
+          # Reduce matrix size - test Node 23 only on ubuntu
           - os: macos-latest
-            node-version: '18'
-          - os: macos-latest
-            node-version: '22'
+            node-version: '23'
           - os: windows-latest
-            node-version: '18'
-          - os: windows-latest
-            node-version: '22'
+            node-version: '23'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -100,8 +96,8 @@ jobs:
       - name: Build project
         run: pnpm run build
 
-      - name: Upload artifacts (ubuntu Node 20 only)
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20'
+      - name: Upload artifacts (ubuntu Node 22 only)
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22'
         uses: actions/upload-artifact@v6
         with:
           name: dist
