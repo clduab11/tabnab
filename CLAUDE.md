@@ -147,8 +147,8 @@ const page = await this.browserConnection.getActiveTab();
 1. **Node.js 18+** and **pnpm** installed
 2. **Chrome/Chromium** running with remote debugging:
    ```bash
-   ./start-chrome.sh  # macOS/Linux
-   .\start-chrome.ps1 # Windows
+   ./scripts/start-chrome.sh  # macOS/Linux
+   .\scripts\start-chrome.ps1 # Windows
    ```
 3. Remote debugging port: **9222** (configurable via `CHROME_DEBUG_PORT` env var)
 
@@ -228,8 +228,9 @@ The `MarkdownExtractor` in `src/extraction/markdown.ts`:
 | `tsconfig.json` | TypeScript compiler options |
 | `biome.json` | Linter/formatter configuration |
 | `mcp-config.example.json` | Example MCP client config |
-| `start-chrome.sh` | Chrome launcher (macOS/Linux) |
-| `start-chrome.ps1` | Chrome launcher (Windows) |
+| `scripts/start-chrome.sh` | Chrome launcher (macOS/Linux) |
+| `scripts/start-chrome.ps1` | Chrome launcher (Windows) |
+| `docs/` | Documentation (IMPLEMENTATION, CONTRIBUTING, SECURITY, etc.) |
 | `dist/` | Compiled JavaScript output |
 
 ## Build Artifacts
