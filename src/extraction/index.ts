@@ -1,1 +1,1 @@
-export { MarkdownExtractor, type ExtractedContent } from './markdown.js';
+export { type ExtractedContent, MarkdownExtractor } from './markdown.js';

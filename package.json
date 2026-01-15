@@ -25,7 +25,12 @@
     "type-check": "tsc --noEmit",
     "test:milestone1": "node dist/test-connection.js"
   },
-  "keywords": ["electron", "mcp", "browser-automation", "puppeteer"],
+  "keywords": [
+    "electron",
+    "mcp",
+    "browser-automation",
+    "puppeteer"
+  ],
   "author": "",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
