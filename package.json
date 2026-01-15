@@ -4,6 +4,18 @@
   "description": "Local MCP server that gives AI agents access to your authenticated browser sessions",
   "main": "dist/main/index.js",
   "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "sideEffects": false,
+  "exports": {
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
+    },
+    "./main": {
+      "types": "./dist/main/index.d.ts",
+      "import": "./dist/main/index.js"
+    }
+  },
   "scripts": {
     "dev": "electron .",
     "build": "tsc",
@@ -13,11 +25,16 @@
     "type-check": "tsc --noEmit",
     "test:milestone1": "node dist/test-connection.js"
   },
-  "keywords": ["electron", "mcp", "browser-automation", "puppeteer"],
+  "keywords": [
+    "electron",
+    "mcp",
+    "browser-automation",
+    "puppeteer"
+  ],
   "author": "",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.2",
@@ -33,6 +50,6 @@
     "@types/jsdom": "^27.0.0",
     "@types/node": "^25.0.9",
     "@types/turndown": "^5.0.5",
-    "typescript": "^5.7.2"
+    "typescript": "^5.8.3"
   }
 }

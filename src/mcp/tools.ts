@@ -1,4 +1,3 @@
-import type { Page } from 'puppeteer-core';
 import { z } from 'zod';
 import { BrowserConnection } from '../browser/connection.js';
 import { MarkdownExtractor } from '../extraction/markdown.js';
