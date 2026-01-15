@@ -9,7 +9,7 @@ Give AI agents access to your real browser cookies and authenticated sessions wi
 
 ## Architecture
 
-```
+```text
 src/
 ├── main/           # Electron menu bar application entry point
 ├── mcp/            # MCP server implementation
@@ -81,12 +81,14 @@ pnpm run test:milestone1
 ### 1. `get_active_tab`
 Returns URL and title of the active browser tab.
 - **Input**: None
-- **Output**: `{ url: string, title: string }`
+- **Success Output**: `{ success: true, url: string, title: string }`
+- **Error Output**: `{ success: false, message: string }`
 
 ### 2. `navigate_and_extract`
 Navigate to URL and extract page content as clean Markdown.
 - **Input**: `{ url: string }` (Zod-validated URL)
-- **Output**: `{ url: string, title: string, markdown: string }`
+- **Success Output**: `{ success: true, url: string, title: string, markdown: string }`
+- **Error Output**: `{ success: false, message: string }`
 
 ### 3. `click_element`
 Click element using CSS selector.

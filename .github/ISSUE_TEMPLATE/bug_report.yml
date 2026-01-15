@@ -61,7 +61,7 @@ body:
       description: Output of `chrome --version`
       placeholder: 'e.g., Google Chrome 120.0.6099.109'
     validations:
-      required: false
+      required: true
 
   - type: input
     id: node-version

@@ -18,12 +18,6 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
-      # Keep major updates separate for review
-      major:
-        patterns:
-          - '*'
-        update-types:
-          - 'major'
     commit-message:
       prefix: 'deps'
       include: 'scope'
