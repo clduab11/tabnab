@@ -1,5 +1,31 @@
 # CLAUDE.md - TabNab Development Guide
 
+> **For AI Agents**: Start with the [Quick Context](#quick-context-for-ai-agents) section below for rapid codebase orientation.
+
+## Quick Context for AI Agents
+
+**What is this?** A local MCP server enabling AI agents to control authenticated browser sessions via Chrome DevTools Protocol.
+
+**Key Entry Points:**
+- `src/mcp/index.ts` → MCP server entry (stdio transport)
+- `src/mcp/server.ts` → Tool registration and protocol handling
+- `src/mcp/tools.ts` → All 5 MCP tool implementations
+- `src/browser/connection.ts` → Chrome CDP connection management
+
+**Before Making Changes:**
+1. Run `pnpm install` if dependencies are missing
+2. Run `pnpm run build` to compile TypeScript
+3. Run `pnpm run lint` to check code style
+4. Run `pnpm run type-check` to verify types
+
+**Critical Patterns:**
+- All external inputs must be validated with Zod schemas
+- Return structured `{ success: boolean, ... }` objects, never throw errors
+- Use strict TypeScript - no `any` types allowed
+- Follow existing code patterns in `src/mcp/tools.ts`
+
+---
+
 ## Project Overview
 
 **TabNab** is a local MCP (Model Context Protocol) server that provides AI agents (Claude, Cursor, Windsurf) with access to authenticated browser sessions. It connects to Chrome/Chromium via the Chrome DevTools Protocol, enabling browser automation while preserving user cookies and sessions.
@@ -269,3 +295,48 @@ After `pnpm run build`:
 3. **Error handling**: Return structured error objects, don't throw
 4. **Code style**: Run `pnpm run lint:fix && pnpm run format` before commits
 5. **Testing**: Verify changes work with `pnpm run test:milestone1`
+
+## Known Limitations
+
+| Limitation | Description | Workaround |
+|------------|-------------|------------|
+| Active Tab Detection | Uses heuristic (last page) rather than true focused tab | Use `navigate_and_extract` to ensure correct tab |
+| Single Browser Support | Only connects to one Chrome instance at a time | Restart Chrome on different port for multiple instances |
+| No Retry Logic | Network failures fail immediately | Implement retry in calling code if needed |
+| Minimal Logging | Limited structured logging for debugging | Check Chrome DevTools console for additional context |
+
+## Future Enhancements
+
+The following improvements are planned or under consideration:
+
+1. **Automated Testing**: Add Jest/Vitest test suite with mocked browser connections
+2. **Structured Logging**: Implement a proper logging system (e.g., pino or winston)
+3. **Connection Pooling**: Reuse CDP connections across tool calls
+4. **Additional Tools**: Consider `wait_for_element`, `execute_script`, `get_cookies`
+5. **Multi-Browser Support**: Firefox/WebKit via Playwright adapter
+6. **Rate Limiting**: Protect against rapid repeated tool calls
+
+## AI Agent Instructions
+
+When working on this codebase, AI agents should:
+
+### DO:
+- Read existing code before making modifications
+- Follow the Zod schema pattern for any new tool inputs
+- Use the error handling pattern consistently
+- Run `pnpm run lint:fix && pnpm run format` before suggesting commits
+- Test changes with `pnpm run test:milestone1` when possible
+
+### DON'T:
+- Use `any` types or disable TypeScript strict checks
+- Throw errors from tool implementations (return error objects instead)
+- Add new dependencies without clear justification
+- Modify CI/CD workflows without explicit user request
+- Skip input validation for external data
+
+### Code Review Checklist:
+- [ ] All new code has explicit TypeScript types
+- [ ] External inputs validated with Zod schemas
+- [ ] Error cases return `{ success: false, message: string }`
+- [ ] No `console.log` in production code (use structured returns)
+- [ ] Follows existing patterns in the codebase
