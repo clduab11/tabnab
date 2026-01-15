@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload artifacts (ubuntu Node 20 only)
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dist
           path: dist/
