@@ -79,7 +79,7 @@ Complete browser automation via MCP protocol: get, navigate, click, fill, screen
 <summary><b>macOS</b></summary>
 
 ```bash
-./start-chrome.sh
+./scripts/start-chrome.sh
 # or manually:
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
 ```
@@ -89,7 +89,7 @@ Complete browser automation via MCP protocol: get, navigate, click, fill, screen
 <summary><b>Linux</b></summary>
 
 ```bash
-./start-chrome.sh
+./scripts/start-chrome.sh
 # or manually:
 google-chrome --remote-debugging-port=9222
 ```
@@ -99,7 +99,7 @@ google-chrome --remote-debugging-port=9222
 <summary><b>Windows</b></summary>
 
 ```powershell
-.\start-chrome.ps1
+.\scripts\start-chrome.ps1
 # or manually:
 "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
 ```
@@ -318,15 +318,15 @@ Browse and analyze content with AI assistance:
 ## 📖 Documentation
 
 - **[CLAUDE.md](CLAUDE.md)** - Development guide for AI agents
-- **[IMPLEMENTATION.md](IMPLEMENTATION.md)** - Technical architecture details
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
-- **[SECURITY.md](SECURITY.md)** - Security considerations & reporting
+- **[IMPLEMENTATION.md](docs/IMPLEMENTATION.md)** - Technical architecture details
+- **[CONTRIBUTING.md](docs/CONTRIBUTING.md)** - Contribution guidelines
+- **[SECURITY.md](docs/SECURITY.md)** - Security considerations & reporting
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+We welcome contributions! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for:
 
 - Development environment setup
 - Code style guidelines
@@ -334,8 +334,8 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - Testing requirements
 
 Before contributing, please review our:
-- [Code of Conduct](CONTRIBUTING.md#code-of-conduct) (respect & professionalism)
-- [License Agreement](CONTRIBUTING.md#license-and-copyright) (CLA terms)
+- [Code of Conduct](docs/CONTRIBUTING.md#code-of-conduct) (respect & professionalism)
+- [License Agreement](docs/CONTRIBUTING.md#license-and-copyright) (CLA terms)
 
 ---
 
@@ -418,7 +418,7 @@ TabNab is available under a **dual-license model**:
 
 ### ❓ Not Sure Which License You Need?
 
-See our **[Commercial License FAQ](COMMERCIAL-LICENSE-FAQ.md)** for detailed examples and guidance.
+See our **[Commercial License FAQ](docs/COMMERCIAL-LICENSE-FAQ.md)** for detailed examples and guidance.
 
 **Contact for Commercial Licensing:**
 - Email: licensing@tabnab.dev *(placeholder)*
@@ -439,7 +439,7 @@ TabNab provides AI agents with powerful access to your authenticated browser ses
 - Use a dedicated Chrome profile for automation
 - Monitor AI agent actions in real-time
 - Don't use with highly sensitive accounts
-- Review [SECURITY.md](SECURITY.md) for detailed guidance
+- Review [SECURITY.md](docs/SECURITY.md) for detailed guidance
 
 **Report Security Issues:** security@tabnab.dev *(placeholder)*
 
