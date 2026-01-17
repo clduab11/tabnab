@@ -7,6 +7,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { MCPTools } from './tools.js';
+import { fail } from '../lib/response.js';
 
 export class TabNabMCPServer {
   private server: Server;
@@ -45,7 +46,7 @@ export class TabNabMCPServer {
           },
           {
             name: 'list_tabs',
-            description: 'List all open tabs with their IDs, URLs, and titles',
+            description: 'List all open tabs with their IDs, URLs, titles, and active state',
             inputSchema: {
               type: 'object',
               properties: {},
@@ -85,6 +86,14 @@ export class TabNabMCPServer {
                   type: 'boolean',
                   description: 'Whether to include prompt-injection warnings',
                 },
+                tabId: {
+                  type: 'string',
+                  description: 'Optional tab identifier returned by list_tabs',
+                },
+                confirmationId: {
+                  type: 'string',
+                  description: 'Optional confirmation ID from confirm_action',
+                },
               },
               required: ['url'],
             },
@@ -98,6 +107,14 @@ export class TabNabMCPServer {
                 selector: {
                   type: 'string',
                   description: 'CSS selector for the element to click',
+                },
+                tabId: {
+                  type: 'string',
+                  description: 'Optional tab identifier returned by list_tabs',
+                },
+                confirmationId: {
+                  type: 'string',
+                  description: 'Optional confirmation ID from confirm_action',
                 },
               },
               required: ['selector'],
@@ -117,6 +134,14 @@ export class TabNabMCPServer {
                   type: 'string',
                   description: 'Value to fill into the input field',
                 },
+                tabId: {
+                  type: 'string',
+                  description: 'Optional tab identifier returned by list_tabs',
+                },
+                confirmationId: {
+                  type: 'string',
+                  description: 'Optional confirmation ID from confirm_action',
+                },
               },
               required: ['selector', 'value'],
             },
@@ -131,6 +156,14 @@ export class TabNabMCPServer {
                   type: 'string',
                   description: 'Text to type',
                 },
+                tabId: {
+                  type: 'string',
+                  description: 'Optional tab identifier returned by list_tabs',
+                },
+                confirmationId: {
+                  type: 'string',
+                  description: 'Optional confirmation ID from confirm_action',
+                },
               },
               required: ['text'],
             },
@@ -144,6 +177,14 @@ export class TabNabMCPServer {
                 key: {
                   type: 'string',
                   description: 'Key to press (e.g., Enter, Escape)',
+                },
+                tabId: {
+                  type: 'string',
+                  description: 'Optional tab identifier returned by list_tabs',
+                },
+                confirmationId: {
+                  type: 'string',
+                  description: 'Optional confirmation ID from confirm_action',
                 },
               },
               required: ['key'],
@@ -163,6 +204,14 @@ export class TabNabMCPServer {
                   type: 'number',
                   description: 'Timeout in milliseconds',
                 },
+                tabId: {
+                  type: 'string',
+                  description: 'Optional tab identifier returned by list_tabs',
+                },
+                confirmationId: {
+                  type: 'string',
+                  description: 'Optional confirmation ID from confirm_action',
+                },
               },
               required: ['selector'],
             },
@@ -180,6 +229,14 @@ export class TabNabMCPServer {
                 waitUntil: {
                   type: 'string',
                   description: 'load, domcontentloaded, or networkidle',
+                },
+                tabId: {
+                  type: 'string',
+                  description: 'Optional tab identifier returned by list_tabs',
+                },
+                confirmationId: {
+                  type: 'string',
+                  description: 'Optional confirmation ID from confirm_action',
                 },
               },
               required: [],
@@ -204,6 +261,14 @@ export class TabNabMCPServer {
                   type: 'number',
                   description: 'Maximum number of items to return',
                 },
+                tabId: {
+                  type: 'string',
+                  description: 'Optional tab identifier returned by list_tabs',
+                },
+                confirmationId: {
+                  type: 'string',
+                  description: 'Optional confirmation ID from confirm_action',
+                },
               },
               required: ['selector'],
             },
@@ -222,26 +287,44 @@ export class TabNabMCPServer {
                   type: 'string',
                   description: 'Optional file path to save the screenshot',
                 },
+                tabId: {
+                  type: 'string',
+                  description: 'Optional tab identifier returned by list_tabs',
+                },
+                confirmationId: {
+                  type: 'string',
+                  description: 'Optional confirmation ID from confirm_action',
+                },
               },
               required: [],
             },
           },
           {
             name: 'confirm_action',
-            description: 'Confirm or cancel a pending action',
+            description: 'Confirm a pending action',
             inputSchema: {
               type: 'object',
               properties: {
-                confirmationToken: {
+                confirmationId: {
                   type: 'string',
-                  description: 'Token from a needs_confirmation response',
-                },
-                action: {
-                  type: 'string',
-                  description: 'confirm or cancel',
+                  description: 'Confirmation ID from a needs_confirmation response',
                 },
               },
-              required: ['confirmationToken'],
+              required: ['confirmationId'],
+            },
+          },
+          {
+            name: 'deny_action',
+            description: 'Deny a pending action',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                confirmationId: {
+                  type: 'string',
+                  description: 'Confirmation ID from a needs_confirmation response',
+                },
+              },
+              required: ['confirmationId'],
             },
           },
           {
@@ -303,6 +386,8 @@ export class TabNabMCPServer {
                 url: string;
                 extractionMode?: 'readability_markdown' | 'raw_dom_sanitized';
                 includeWarnings?: boolean;
+                tabId?: string;
+                confirmationId?: string;
               }
             );
             return {
@@ -316,7 +401,9 @@ export class TabNabMCPServer {
           }
 
           case 'click_element': {
-            const result = await this.tools.clickElement(args as { selector: string });
+            const result = await this.tools.clickElement(
+              args as { selector: string; tabId?: string; confirmationId?: string }
+            );
             return {
               content: [
                 {
@@ -328,7 +415,9 @@ export class TabNabMCPServer {
           }
 
           case 'fill_input': {
-            const result = await this.tools.fillInput(args as { selector: string; value: string });
+            const result = await this.tools.fillInput(
+              args as { selector: string; value: string; tabId?: string; confirmationId?: string }
+            );
             return {
               content: [
                 {
@@ -339,7 +428,9 @@ export class TabNabMCPServer {
             };
           }
           case 'keyboard_type': {
-            const result = await this.tools.keyboardType(args as { text: string });
+            const result = await this.tools.keyboardType(
+              args as { text: string; tabId?: string; confirmationId?: string }
+            );
             return {
               content: [
                 {
@@ -350,7 +441,9 @@ export class TabNabMCPServer {
             };
           }
           case 'press_key': {
-            const result = await this.tools.pressKey(args as { key: string });
+            const result = await this.tools.pressKey(
+              args as { key: string; tabId?: string; confirmationId?: string }
+            );
             return {
               content: [
                 {
@@ -362,7 +455,12 @@ export class TabNabMCPServer {
           }
           case 'wait_for_selector': {
             const result = await this.tools.waitForSelector(
-              args as { selector: string; timeoutMs?: number }
+              args as {
+                selector: string;
+                timeoutMs?: number;
+                tabId?: string;
+                confirmationId?: string;
+              }
             );
             return {
               content: [
@@ -375,7 +473,12 @@ export class TabNabMCPServer {
           }
           case 'wait_for_navigation': {
             const result = await this.tools.waitForNavigation(
-              args as { timeoutMs?: number; waitUntil?: 'load' | 'domcontentloaded' | 'networkidle' }
+              args as {
+                timeoutMs?: number;
+                waitUntil?: 'load' | 'domcontentloaded' | 'networkidle';
+                tabId?: string;
+                confirmationId?: string;
+              }
             );
             return {
               content: [
@@ -388,7 +491,13 @@ export class TabNabMCPServer {
           }
           case 'query_selector_all': {
             const result = await this.tools.querySelectorAll(
-              args as { selector: string; attributes?: string[]; maxItems?: number }
+              args as {
+                selector: string;
+                attributes?: string[];
+                maxItems?: number;
+                tabId?: string;
+                confirmationId?: string;
+              }
             );
             return {
               content: [
@@ -405,6 +514,8 @@ export class TabNabMCPServer {
             const result = await this.tools.screenshotTab({
               fullPage: (screenshotArgs as { fullPage?: boolean }).fullPage ?? false,
               path: (screenshotArgs as { path?: string }).path,
+              tabId: (screenshotArgs as { tabId?: string }).tabId,
+              confirmationId: (screenshotArgs as { confirmationId?: string }).confirmationId,
             });
             return {
               content: [
@@ -417,8 +528,19 @@ export class TabNabMCPServer {
           }
           case 'confirm_action': {
             const result = await this.tools.confirmAction(
-              args as { confirmationToken: string; action?: 'confirm' | 'cancel' }
+              args as { confirmationId: string }
             );
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+          case 'deny_action': {
+            const result = await this.tools.denyAction(args as { confirmationId: string });
             return {
               content: [
                 {
@@ -449,7 +571,7 @@ export class TabNabMCPServer {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ error: errorMessage }, null, 2),
+              text: JSON.stringify(fail('INTERNAL_ERROR', errorMessage), null, 2),
             },
           ],
           isError: true,
