@@ -5,6 +5,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { MCPTools } from '../mcp/tools.js';
 import type { PolicyConfig } from '../policy/types.js';
 
@@ -93,11 +94,18 @@ test('browser tools integration', async (t) => {
   const page = await browser.context.newPage();
   await page.goto(server.baseUrl);
 
+  // Create unique audit log path for this test
+  const testDir = await mkdtemp(join(tmpdir(), 'tabnab-test-'));
+  const auditLogPath = join(testDir, `audit-${randomUUID()}.log`);
+  t.after(async () => {
+    await rm(testDir, { recursive: true, force: true });
+  });
+
   const policyConfig: PolicyConfig = {
     allowedDomains: ['127.0.0.1'],
     allowedPathPrefixes: {},
     confirmationMode: 'confirm-on-sensitive',
-    auditLogPath: `${tmpdir()}/tabnab-audit.log`,
+    auditLogPath,
     maxSteps: 30,
     selectorLogMode: 'truncate',
   };

@@ -861,7 +861,12 @@ export class MCPTools {
   async confirmAction(
     input: ConfirmActionInput
   ): Promise<ToolResponse<{ confirmationId: string; actionSummary: string }>> {
-    const validated = ConfirmActionSchema.parse(input);
+    const result = ConfirmActionSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const approved = this.confirmations.approve(validated.confirmationId);
     if (!approved) {
       return fail('CONFIRMATION_EXPIRED', 'Confirmation ID expired or invalid.');
@@ -873,7 +878,12 @@ export class MCPTools {
   async denyAction(
     input: DenyActionInput
   ): Promise<ToolResponse<{ confirmationId: string; denied: boolean }>> {
-    const validated = DenyActionSchema.parse(input);
+    const result = DenyActionSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const denied = this.confirmations.deny(validated.confirmationId);
     if (!denied) {
       return fail('CONFIRMATION_EXPIRED', 'Confirmation ID expired or invalid.');
@@ -1040,16 +1050,29 @@ export class MCPTools {
       };
     }
 
-    await page.keyboard.type(validated.text);
-    await this.tabs.markFocused(page);
-    const auditId = await this.auditLogger.logEvent({
-      toolName: 'keyboard_type',
-      actionType: 'keyboard_type',
-      url: page.url(),
-      outcome: 'confirmed',
-    });
+    try {
+      await page.keyboard.type(validated.text);
+      await this.tabs.markFocused(page);
+      const auditId = await this.auditLogger.logEvent({
+        toolName: 'keyboard_type',
+        actionType: 'keyboard_type',
+        url: page.url(),
+        outcome: 'confirmed',
+      });
 
-    return ok({ message: 'Typed text via keyboard.', auditId });
+      return ok({ message: 'Typed text via keyboard.', auditId });
+    } catch (error) {
+      await this.auditLogger.logEvent({
+        toolName: 'keyboard_type',
+        actionType: 'keyboard_type',
+        url: page.url(),
+        outcome: 'denied',
+      });
+      return fail(
+        'ACTION_FAILED',
+        `Failed to type text: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   private async executePressKey(
@@ -1063,16 +1086,29 @@ export class MCPTools {
       };
     }
 
-    await page.keyboard.press(validated.key);
-    await this.tabs.markFocused(page);
-    const auditId = await this.auditLogger.logEvent({
-      toolName: 'press_key',
-      actionType: 'press_key',
-      url: page.url(),
-      outcome: 'confirmed',
-    });
+    try {
+      await page.keyboard.press(validated.key);
+      await this.tabs.markFocused(page);
+      const auditId = await this.auditLogger.logEvent({
+        toolName: 'press_key',
+        actionType: 'press_key',
+        url: page.url(),
+        outcome: 'confirmed',
+      });
 
-    return ok({ message: `Pressed key: ${validated.key}`, auditId });
+      return ok({ message: `Pressed key: ${validated.key}`, auditId });
+    } catch (error) {
+      await this.auditLogger.logEvent({
+        toolName: 'press_key',
+        actionType: 'press_key',
+        url: page.url(),
+        outcome: 'denied',
+      });
+      return fail(
+        'ACTION_FAILED',
+        `Failed to press key: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   private getInjectionWarnings(content: string): string[] {
@@ -1111,7 +1147,19 @@ export class MCPTools {
       return { page };
     }
 
+    // Call getActiveTab() if available to ensure page properties are accessible
+    if ('getActiveTab' in this.browserConnection && typeof this.browserConnection.getActiveTab === 'function') {
+      try {
+        await this.browserConnection.getActiveTab();
+      } catch {
+        // Ignore errors, fallback to registry-based selection
+      }
+    }
+    
     const page = await this.tabs.getActivePage(pages);
+    if (!page) {
+      return { error: fail('NO_TABS', 'No active tab found') };
+    }
     await this.tabs.markFocused(page);
     return { page };
   }

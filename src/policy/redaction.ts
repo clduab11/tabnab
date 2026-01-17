@@ -29,7 +29,36 @@ export function redactUrl(url: string): string {
       }
     }
     const search = redactedParams.toString();
-    return `${parsed.origin}${parsed.pathname}${search ? `?${search}` : ''}`;
+    
+    // Redact URL fragments
+    let redactedHash = '';
+    if (parsed.hash) {
+      const hashContent = parsed.hash.slice(1); // Strip leading '#'
+      try {
+        const hashParams = new URLSearchParams(hashContent);
+        for (const key of hashParams.keys()) {
+          if (isSensitiveKey(key)) {
+            hashParams.set(key, REDACTED);
+          }
+        }
+        const hashString = hashParams.toString();
+        if (hashString) {
+          redactedHash = `#${hashString}`;
+        }
+      } catch {
+        // If hash is not valid URLSearchParams, apply basic string redaction
+        // by checking for common token patterns in the hash
+        let safeHash = hashContent;
+        for (const param of SENSITIVE_QUERY_PARAMS) {
+          // Match patterns like "token=value" or "token:value" in the hash
+          const regex = new RegExp(`(${param}[=:][^&/#]*)`,' gi');
+          safeHash = safeHash.replace(regex, `${param}=${REDACTED}`);
+        }
+        redactedHash = safeHash ? `#${safeHash}` : '';
+      }
+    }
+    
+    return `${parsed.origin}${parsed.pathname}${search ? `?${search}` : ''}${redactedHash}`;
   } catch {
     return url;
   }
