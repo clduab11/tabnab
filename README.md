@@ -184,19 +184,57 @@ TabNab provides a focused set of MCP tools for browser automation with policy en
 | Tool | Description | Input | Output |
 |------|-------------|-------|--------|
 | **`get_active_tab`** | Get URL and title of active tab | None | `{ ok, data: { url, title } }` |
-| **`list_tabs`** | List all open tabs | None | `{ ok, data: [{ tabId, url, title }] }` |
+| **`list_tabs`** | List all open tabs | None | `{ ok, data: [{ tabId, url, title, active, windowId? }] }` |
 | **`activate_tab`** | Set active tab | `{ tabId }` | `{ ok, data: { tabId } }` |
-| **`navigate_and_extract`** | Navigate and extract (Markdown or sanitized DOM) | `{ url, extractionMode?, includeWarnings? }` | `{ ok, data: { url, title, markdown? html? } }` |
-| **`click_element`** | Click an element | `{ selector }` | `{ ok, data: { message } }` |
-| **`fill_input`** | Fill an input | `{ selector, value }` | `{ ok, data: { message } }` |
-| **`keyboard_type`** | Type text | `{ text }` | `{ ok, data: { message } }` |
-| **`press_key`** | Press a key | `{ key }` | `{ ok, data: { message } }` |
-| **`wait_for_selector`** | Wait for selector | `{ selector, timeoutMs? }` | `{ ok, data: { found, url, title } }` |
-| **`wait_for_navigation`** | Wait for navigation | `{ timeoutMs?, waitUntil? }` | `{ ok, data: { url, title } }` |
-| **`query_selector_all`** | Extract text/attrs for lists/tables | `{ selector, attributes?, maxItems? }` | `{ ok, data: { items } }` |
-| **`screenshot_tab`** | Capture screenshot | `{ fullPage?, path? }` | `{ ok, data: { screenshot?, path?, message } }` |
-| **`confirm_action`** | Confirm/cancel pending actions | `{ confirmationToken, action? }` | `{ ok, data }` |
+| **`navigate_and_extract`** | Navigate and extract (Markdown or sanitized DOM) | `{ url, extractionMode?, includeWarnings?, tabId?, confirmationId? }` | `{ ok, data: { url, title, markdown? html? } }` |
+| **`click_element`** | Click an element | `{ selector, tabId?, confirmationId? }` | `{ ok, data: { message } }` |
+| **`fill_input`** | Fill an input | `{ selector, value, tabId?, confirmationId? }` | `{ ok, data: { message } }` |
+| **`keyboard_type`** | Type text | `{ text, tabId?, confirmationId? }` | `{ ok, data: { message } }` |
+| **`press_key`** | Press a key | `{ key, tabId?, confirmationId? }` | `{ ok, data: { message } }` |
+| **`wait_for_selector`** | Wait for selector | `{ selector, timeoutMs?, tabId?, confirmationId? }` | `{ ok, data: { found, url, title } }` |
+| **`wait_for_navigation`** | Wait for navigation | `{ timeoutMs?, waitUntil?, tabId?, confirmationId? }` | `{ ok, data: { url, title } }` |
+| **`query_selector_all`** | Extract text/attrs for lists/tables | `{ selector, attributes?, maxItems?, tabId?, confirmationId? }` | `{ ok, data: { items } }` |
+| **`screenshot_tab`** | Capture screenshot | `{ fullPage?, path?, tabId?, confirmationId? }` | `{ ok, data: { screenshot?, path?, message } }` |
+| **`confirm_action`** | Approve pending actions | `{ confirmationId }` | `{ ok, data: { confirmationId, actionSummary } }` |
+| **`deny_action`** | Deny pending actions | `{ confirmationId }` | `{ ok, data: { confirmationId, denied } }` |
 | **`reset_session`** | Reset step counter | None | `{ ok, data: { reset } }` |
+
+### Response Contract & Versioning
+
+All tool responses follow a shared contract:
+
+```json
+{
+  "ok": true,
+  "success": true,
+  "protocolVersion": 2,
+  "warnings": [],
+  "data": {}
+}
+```
+
+Errors use the same envelope with `ok: false`, an `error` object, and `success: false` for backward compatibility.
+
+### Tab Targeting
+
+Use `list_tabs` to obtain stable `tabId` values. Every page/action tool accepts an optional `tabId`. If omitted, TabNab chooses the active tab by preferring the focused tab (if detectable), falling back to the last focused tab, and then the first non-extension/non-devtools tab.
+
+### Confirmation Flow
+
+When a policy decision requires confirmation, tools return:
+
+```json
+{
+  "ok": false,
+  "success": false,
+  "protocolVersion": 2,
+  "warnings": [],
+  "error": { "code": "NEEDS_CONFIRMATION", "message": "..." },
+  "data": { "confirmationId": "...", "actionSummary": "..." }
+}
+```
+
+Call `confirm_action` with the `confirmationId`, then retry the original action with `confirmationId` to proceed. Use `deny_action` to reject the pending action.
 
 <details>
 <summary><b>🔍 Tool Details: get_active_tab</b></summary>

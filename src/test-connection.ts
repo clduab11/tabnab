@@ -11,22 +11,28 @@
  * 2. At least one tab must be open in Chrome
  */
 
-import { BrowserConnection } from './browser/connection.js';
+import { MCPTools } from './mcp/tools.js';
 
 async function testConnection() {
   console.log('🧪 Testing TabNab - Milestone 1: Connect to Chrome and get active tab\n');
 
-  const connection = new BrowserConnection(9222);
+  const tools = new MCPTools(9222);
 
   try {
     console.log('📡 Attempting to connect to Chrome on port 9222...');
-    await connection.connect();
+    const tabsResponse = await tools.listTabs();
+    if (!tabsResponse.ok || !tabsResponse.data) {
+      throw new Error(tabsResponse.error?.message ?? 'Unable to list tabs');
+    }
     console.log('✅ Successfully connected to Chrome!\n');
 
     console.log('🔍 Retrieving active tab information...');
-    const activeTab = await connection.getActiveTab();
-    const url = activeTab.url();
-    const title = await activeTab.title();
+    const activeTab =
+      tabsResponse.data.find((tab) => tab.active) ?? tabsResponse.data.at(0);
+    if (!activeTab) {
+      throw new Error('No active tab found');
+    }
+    const { url, title } = activeTab;
 
     console.log('✅ Active tab retrieved successfully!\n');
     console.log('📄 Active Tab Info:');
@@ -35,7 +41,7 @@ async function testConnection() {
 
     console.log('🎉 Milestone 1 Complete: Connection successful and active tab URL retrieved!');
 
-    await connection.disconnect();
+    await tools.disconnect();
     console.log('\n✅ Disconnected from Chrome');
   } catch (error) {
     console.error('❌ Test failed:', error instanceof Error ? error.message : String(error));

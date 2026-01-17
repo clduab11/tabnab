@@ -47,15 +47,21 @@ test('click_element enforces confirmation and executes on confirm_action', async
   const result = await tools.clickElement({ selector: '#delete-account' });
 
   assert.equal(result.ok, false);
-  assert.equal(result.status, 'needs_confirmation');
+  assert.equal(result.error?.code, 'NEEDS_CONFIRMATION');
   assert.equal(page.clicked, false);
-  assert.ok(result.confirmation_token);
+  assert.ok(result.data && 'confirmationId' in result.data);
 
   const confirmed = await tools.confirmAction({
-    confirmationToken: result.confirmation_token ?? '',
-    action: 'confirm',
+    confirmationId: (result.data as { confirmationId: string }).confirmationId,
   });
 
   assert.equal(confirmed.ok, true);
+
+  const executed = await tools.clickElement({
+    selector: '#delete-account',
+    confirmationId: (result.data as { confirmationId: string }).confirmationId,
+  });
+
+  assert.equal(executed.ok, true);
   assert.equal(page.clicked, true);
 });

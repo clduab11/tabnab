@@ -1,13 +1,14 @@
 import { z } from 'zod';
 import { BrowserConnection } from '../browser/connection.js';
 import { MarkdownExtractor } from '../extraction/markdown.js';
+import { TabRegistry } from '../browser/tabRegistry.js';
+import { ok, fail, type ToolResponse } from '../lib/response.js';
 import { detectPromptInjection, buildInjectionWarnings } from '../policy/prompts.js';
 import { enforcePolicy, loadPolicyConfig } from '../policy/policy.js';
 import { AuditLogger } from '../policy/audit.js';
 import { ConfirmationStore } from '../policy/confirmations.js';
 import type { PolicyConfig } from '../policy/types.js';
 import { SessionManager } from '../session/session.js';
-import { TabRegistry } from '../session/tabs.js';
 import type { Page } from 'playwright';
 import { JSDOM } from 'jsdom';
 
@@ -17,20 +18,28 @@ export const NavigateAndExtractSchema = z.object({
   url: z.string().url('Must be a valid URL'),
   extractionMode: ExtractionModeSchema.default('readability_markdown'),
   includeWarnings: z.boolean().default(true),
+  tabId: z.string().min(1, 'Tab ID is required').optional(),
+  confirmationId: z.string().min(1, 'Confirmation ID is required').optional(),
 });
 
 export const ClickElementSchema = z.object({
   selector: z.string().min(1, 'Selector cannot be empty'),
+  tabId: z.string().min(1, 'Tab ID is required').optional(),
+  confirmationId: z.string().min(1, 'Confirmation ID is required').optional(),
 });
 
 export const FillInputSchema = z.object({
   selector: z.string().min(1, 'Selector cannot be empty'),
   value: z.string(),
+  tabId: z.string().min(1, 'Tab ID is required').optional(),
+  confirmationId: z.string().min(1, 'Confirmation ID is required').optional(),
 });
 
 export const ScreenshotSchema = z.object({
   fullPage: z.boolean().default(false),
   path: z.string().optional(),
+  tabId: z.string().min(1, 'Tab ID is required').optional(),
+  confirmationId: z.string().min(1, 'Confirmation ID is required').optional(),
 });
 
 export const ActivateTabSchema = z.object({
@@ -40,36 +49,49 @@ export const ActivateTabSchema = z.object({
 export const WaitForSelectorSchema = z.object({
   selector: z.string().min(1, 'Selector cannot be empty'),
   timeoutMs: z.number().int().positive().optional(),
+  tabId: z.string().min(1, 'Tab ID is required').optional(),
+  confirmationId: z.string().min(1, 'Confirmation ID is required').optional(),
 });
 
 export const WaitForNavigationSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
   waitUntil: z.enum(['load', 'domcontentloaded', 'networkidle']).optional(),
+  tabId: z.string().min(1, 'Tab ID is required').optional(),
+  confirmationId: z.string().min(1, 'Confirmation ID is required').optional(),
 });
 
 export const QuerySelectorAllSchema = z.object({
   selector: z.string().min(1, 'Selector cannot be empty'),
   attributes: z.array(z.string()).optional(),
   maxItems: z.number().int().positive().optional(),
+  tabId: z.string().min(1, 'Tab ID is required').optional(),
+  confirmationId: z.string().min(1, 'Confirmation ID is required').optional(),
 });
 
 export const KeyboardTypeSchema = z.object({
   text: z.string(),
+  tabId: z.string().min(1, 'Tab ID is required').optional(),
+  confirmationId: z.string().min(1, 'Confirmation ID is required').optional(),
 });
 
 export const PressKeySchema = z.object({
   key: z.string().min(1, 'Key is required'),
+  tabId: z.string().min(1, 'Tab ID is required').optional(),
+  confirmationId: z.string().min(1, 'Confirmation ID is required').optional(),
 });
 
 export const ConfirmActionSchema = z.object({
-  confirmationToken: z.string().min(1, 'Confirmation token is required'),
-  action: z.enum(['confirm', 'cancel']).default('confirm'),
+  confirmationId: z.string().min(1, 'Confirmation ID is required'),
+});
+
+export const DenyActionSchema = z.object({
+  confirmationId: z.string().min(1, 'Confirmation ID is required'),
 });
 
 export type NavigateAndExtractInput = z.input<typeof NavigateAndExtractSchema>;
 export type ClickElementInput = z.infer<typeof ClickElementSchema>;
 export type FillInputInput = z.infer<typeof FillInputSchema>;
-export type ScreenshotInput = z.infer<typeof ScreenshotSchema>;
+export type ScreenshotInput = z.input<typeof ScreenshotSchema>;
 export type ActivateTabInput = z.infer<typeof ActivateTabSchema>;
 export type WaitForSelectorInput = z.infer<typeof WaitForSelectorSchema>;
 export type WaitForNavigationInput = z.infer<typeof WaitForNavigationSchema>;
@@ -77,21 +99,21 @@ export type QuerySelectorAllInput = z.infer<typeof QuerySelectorAllSchema>;
 export type KeyboardTypeInput = z.infer<typeof KeyboardTypeSchema>;
 export type PressKeyInput = z.infer<typeof PressKeySchema>;
 export type ConfirmActionInput = z.input<typeof ConfirmActionSchema>;
+export type DenyActionInput = z.input<typeof DenyActionSchema>;
 
-type ToolResponse<T> = {
-  ok: boolean;
-  data?: T;
-  warnings: string[];
+type PolicyMetadata = {
   auditId?: string;
-  status?: 'needs_confirmation';
-  confirmation_token?: string;
-  summary?: string;
-  next_call_hint?: string;
   reasonCodes?: string[];
-  message?: string;
 };
 
-type PendingAction = ToolResponse<unknown>;
+type ConfirmationMetadata = PolicyMetadata & {
+  confirmationId: string;
+  actionSummary: string;
+};
+
+type PageResolution =
+  | { page: Page; error?: undefined }
+  | { page?: undefined; error: ToolResponse<never> };
 
 export interface MCPToolsOptions {
   debugPort?: number;
@@ -105,10 +127,9 @@ export class MCPTools {
   private markdownExtractor: MarkdownExtractor;
   private policyConfig: PolicyConfig;
   private auditLogger: AuditLogger;
-  private confirmations = new ConfirmationStore<ToolResponse<unknown>>();
+  private confirmations = new ConfirmationStore();
   private session: SessionManager;
   private tabs = new TabRegistry();
-  private lastUsedTabId: string | null = null;
 
   constructor(options: number | MCPToolsOptions = 9222) {
     const resolvedOptions = typeof options === 'number' ? { debugPort: options } : options;
@@ -123,59 +144,71 @@ export class MCPTools {
   }
 
   async getActiveTab(): Promise<ToolResponse<{ url: string; title: string }>> {
-    const page = await this.getActivePage();
+    const resolved = await this.getPageForInput();
+    if (resolved.error) {
+      return resolved.error;
+    }
+    const { page } = resolved;
     const url = page.url();
     const title = await page.title();
 
-    return { ok: true, data: { url, title }, warnings: [] };
+    return ok({ url, title });
   }
 
-  async listTabs(): Promise<ToolResponse<{ tabId: string; url: string; title: string }[]>> {
+  async listTabs(): Promise<
+    ToolResponse<{ tabId: string; url: string; title: string; active: boolean; windowId?: string }[]>
+  > {
     const pages = await this.browserConnection.getAllTabs();
     if (pages.length === 0) {
-      return {
-        ok: false,
-        warnings: [],
-        message: 'No tabs found in the browser',
-      };
+      return fail('NO_TABS', 'No tabs found in the browser');
     }
 
-    this.tabs.refresh(pages);
-    const results = await Promise.all(
-      pages.map(async (page) => ({
-        tabId: this.tabs.getId(page),
-        url: page.url(),
-        title: await page.title(),
-      }))
-    );
-
-    return { ok: true, data: results, warnings: [] };
+    const results = await this.tabs.listTabs(pages);
+    return ok(results);
   }
 
   async activateTab(input: ActivateTabInput): Promise<ToolResponse<{ tabId: string }>> {
     const validated = ActivateTabSchema.parse(input);
     const pages = await this.browserConnection.getAllTabs();
-    this.tabs.refresh(pages);
+    if (pages.length === 0) {
+      return fail('NO_TABS', 'No tabs found in the browser');
+    }
+    await this.tabs.refresh(pages);
     const page = this.tabs.getPage(validated.tabId);
 
     if (!page) {
-      return { ok: false, warnings: [], message: 'Tab not found' };
+      return fail('TAB_NOT_FOUND', 'Tab not found');
     }
 
     this.session.setActiveTabId(validated.tabId);
-    this.lastUsedTabId = validated.tabId;
     await page.bringToFront();
+    await this.tabs.markFocused(page);
 
-    return { ok: true, data: { tabId: validated.tabId }, warnings: [] };
+    return ok({ tabId: validated.tabId });
   }
 
   async navigateAndExtract(
     input: NavigateAndExtractInput
   ): Promise<
-    ToolResponse<{ url: string; title: string; markdown?: string; html?: string; truncated?: boolean }>
+    ToolResponse<
+      | {
+          url: string;
+          title: string;
+          markdown?: string;
+          html?: string;
+          truncated?: boolean;
+          auditId?: string;
+        }
+      | ConfirmationMetadata
+      | PolicyMetadata
+    >
   > {
     const validated = NavigateAndExtractSchema.parse(input);
-    const page = await this.getActivePage();
+    const resolved = await this.getPageForInput(validated.tabId);
+    if (resolved.error) {
+      return resolved.error;
+    }
+    const { page } = resolved;
 
     const policyDecision = enforcePolicy(
       {
@@ -196,18 +229,19 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
-        reasonCodes: policyDecision.reasonCodes,
-        message: 'Navigation blocked by policy.',
-        auditId,
+        ...fail('POLICY_BLOCKED', 'Navigation blocked by policy.'),
+        data: { auditId, reasonCodes: policyDecision.reasonCodes },
       };
     }
 
-    if (policyDecision.requiresConfirmation) {
+    const approved = this.consumeConfirmationIfApproved(
+      'navigate_and_extract',
+      validated.confirmationId
+    );
+    if (policyDecision.requiresConfirmation && !approved) {
       const pending = this.confirmations.create(
         `Navigate to ${validated.url} and extract content`,
-        async () => this.executeNavigateAndExtract(validated, page)
+        'navigate_and_extract'
       );
       const auditId = await this.auditLogger.logEvent({
         toolName: 'navigate_and_extract',
@@ -217,22 +251,28 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
-        status: 'needs_confirmation',
-        confirmation_token: pending.token,
-        summary: pending.summary,
-        next_call_hint: 'Use confirm_action with the confirmation_token to proceed.',
-        auditId,
+        ...fail('NEEDS_CONFIRMATION', 'Navigation requires confirmation.'),
+        data: {
+          confirmationId: pending.id,
+          actionSummary: pending.summary,
+          auditId,
+          reasonCodes: policyDecision.reasonCodes,
+        },
       };
     }
 
     return this.executeNavigateAndExtract(validated, page);
   }
 
-  async clickElement(input: ClickElementInput): Promise<ToolResponse<{ message: string }>> {
+  async clickElement(
+    input: ClickElementInput
+  ): Promise<ToolResponse<{ message?: string; auditId?: string } | ConfirmationMetadata | PolicyMetadata>> {
     const validated = ClickElementSchema.parse(input);
-    const page = await this.getActivePage();
+    const resolved = await this.getPageForInput(validated.tabId);
+    if (resolved.error) {
+      return resolved.error;
+    }
+    const { page } = resolved;
     const url = page.url();
     const elementText = await this.safeGetElementText(page, validated.selector);
 
@@ -257,18 +297,19 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
-        reasonCodes: policyDecision.reasonCodes,
-        message: 'Click blocked by policy.',
-        auditId,
+        ...fail('POLICY_BLOCKED', 'Click blocked by policy.'),
+        data: { auditId, reasonCodes: policyDecision.reasonCodes },
       };
     }
 
-    if (policyDecision.requiresConfirmation) {
+    const approved = this.consumeConfirmationIfApproved(
+      'click_element',
+      validated.confirmationId
+    );
+    if (policyDecision.requiresConfirmation && !approved) {
       const pending = this.confirmations.create(
         `Click ${validated.selector} on ${url}`,
-        async () => this.executeClick(validated, page)
+        'click_element'
       );
       const auditId = await this.auditLogger.logEvent({
         toolName: 'click_element',
@@ -279,22 +320,28 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
-        status: 'needs_confirmation',
-        confirmation_token: pending.token,
-        summary: pending.summary,
-        next_call_hint: 'Use confirm_action with the confirmation_token to proceed.',
-        auditId,
+        ...fail('NEEDS_CONFIRMATION', 'Click requires confirmation.'),
+        data: {
+          confirmationId: pending.id,
+          actionSummary: pending.summary,
+          auditId,
+          reasonCodes: policyDecision.reasonCodes,
+        },
       };
     }
 
     return this.executeClick(validated, page);
   }
 
-  async fillInput(input: FillInputInput): Promise<ToolResponse<{ message: string }>> {
+  async fillInput(
+    input: FillInputInput
+  ): Promise<ToolResponse<{ message?: string; auditId?: string } | ConfirmationMetadata | PolicyMetadata>> {
     const validated = FillInputSchema.parse(input);
-    const page = await this.getActivePage();
+    const resolved = await this.getPageForInput(validated.tabId);
+    if (resolved.error) {
+      return resolved.error;
+    }
+    const { page } = resolved;
     const url = page.url();
 
     const policyDecision = enforcePolicy(
@@ -317,18 +364,16 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
-        reasonCodes: policyDecision.reasonCodes,
-        message: 'Fill blocked by policy.',
-        auditId,
+        ...fail('POLICY_BLOCKED', 'Fill blocked by policy.'),
+        data: { auditId, reasonCodes: policyDecision.reasonCodes },
       };
     }
 
-    if (policyDecision.requiresConfirmation) {
+    const approved = this.consumeConfirmationIfApproved('fill_input', validated.confirmationId);
+    if (policyDecision.requiresConfirmation && !approved) {
       const pending = this.confirmations.create(
         `Fill ${validated.selector} on ${url}`,
-        async () => this.executeFill(validated, page)
+        'fill_input'
       );
       const auditId = await this.auditLogger.logEvent({
         toolName: 'fill_input',
@@ -339,22 +384,28 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
-        status: 'needs_confirmation',
-        confirmation_token: pending.token,
-        summary: pending.summary,
-        next_call_hint: 'Use confirm_action with the confirmation_token to proceed.',
-        auditId,
+        ...fail('NEEDS_CONFIRMATION', 'Fill requires confirmation.'),
+        data: {
+          confirmationId: pending.id,
+          actionSummary: pending.summary,
+          auditId,
+          reasonCodes: policyDecision.reasonCodes,
+        },
       };
     }
 
     return this.executeFill(validated, page);
   }
 
-  async keyboardType(input: KeyboardTypeInput): Promise<ToolResponse<{ message: string }>> {
+  async keyboardType(
+    input: KeyboardTypeInput
+  ): Promise<ToolResponse<{ message?: string; auditId?: string } | ConfirmationMetadata | PolicyMetadata>> {
     const validated = KeyboardTypeSchema.parse(input);
-    const page = await this.getActivePage();
+    const resolved = await this.getPageForInput(validated.tabId);
+    if (resolved.error) {
+      return resolved.error;
+    }
+    const { page } = resolved;
     const url = page.url();
 
     const policyDecision = enforcePolicy(
@@ -375,19 +426,17 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
-        reasonCodes: policyDecision.reasonCodes,
-        message: 'Keyboard input blocked by policy.',
-        auditId,
+        ...fail('POLICY_BLOCKED', 'Keyboard input blocked by policy.'),
+        data: { auditId, reasonCodes: policyDecision.reasonCodes },
       };
     }
 
-    if (policyDecision.requiresConfirmation) {
-      const pending = this.confirmations.create(
-        `Type text on ${url}`,
-        async () => this.executeKeyboardType(validated, page)
-      );
+    const approved = this.consumeConfirmationIfApproved(
+      'keyboard_type',
+      validated.confirmationId
+    );
+    if (policyDecision.requiresConfirmation && !approved) {
+      const pending = this.confirmations.create(`Type text on ${url}`, 'keyboard_type');
       const auditId = await this.auditLogger.logEvent({
         toolName: 'keyboard_type',
         actionType: 'keyboard_type',
@@ -396,22 +445,28 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
-        status: 'needs_confirmation',
-        confirmation_token: pending.token,
-        summary: pending.summary,
-        next_call_hint: 'Use confirm_action with the confirmation_token to proceed.',
-        auditId,
+        ...fail('NEEDS_CONFIRMATION', 'Keyboard input requires confirmation.'),
+        data: {
+          confirmationId: pending.id,
+          actionSummary: pending.summary,
+          auditId,
+          reasonCodes: policyDecision.reasonCodes,
+        },
       };
     }
 
     return this.executeKeyboardType(validated, page);
   }
 
-  async pressKey(input: PressKeyInput): Promise<ToolResponse<{ message: string }>> {
+  async pressKey(
+    input: PressKeyInput
+  ): Promise<ToolResponse<{ message?: string; auditId?: string } | ConfirmationMetadata | PolicyMetadata>> {
     const validated = PressKeySchema.parse(input);
-    const page = await this.getActivePage();
+    const resolved = await this.getPageForInput(validated.tabId);
+    if (resolved.error) {
+      return resolved.error;
+    }
+    const { page } = resolved;
     const url = page.url();
 
     const policyDecision = enforcePolicy(
@@ -433,19 +488,14 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
-        reasonCodes: policyDecision.reasonCodes,
-        message: 'Key press blocked by policy.',
-        auditId,
+        ...fail('POLICY_BLOCKED', 'Key press blocked by policy.'),
+        data: { auditId, reasonCodes: policyDecision.reasonCodes },
       };
     }
 
-    if (policyDecision.requiresConfirmation) {
-      const pending = this.confirmations.create(
-        `Press ${validated.key} on ${url}`,
-        async () => this.executePressKey(validated, page)
-      );
+    const approved = this.consumeConfirmationIfApproved('press_key', validated.confirmationId);
+    if (policyDecision.requiresConfirmation && !approved) {
+      const pending = this.confirmations.create(`Press ${validated.key} on ${url}`, 'press_key');
       const auditId = await this.auditLogger.logEvent({
         toolName: 'press_key',
         actionType: 'press_key',
@@ -454,13 +504,13 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
-        status: 'needs_confirmation',
-        confirmation_token: pending.token,
-        summary: pending.summary,
-        next_call_hint: 'Use confirm_action with the confirmation_token to proceed.',
-        auditId,
+        ...fail('NEEDS_CONFIRMATION', 'Key press requires confirmation.'),
+        data: {
+          confirmationId: pending.id,
+          actionSummary: pending.summary,
+          auditId,
+          reasonCodes: policyDecision.reasonCodes,
+        },
       };
     }
 
@@ -469,9 +519,19 @@ export class MCPTools {
 
   async waitForSelector(
     input: WaitForSelectorInput
-  ): Promise<ToolResponse<{ found: boolean; url: string; title: string }>> {
+  ): Promise<
+    ToolResponse<
+      | { found: boolean; url: string; title: string }
+      | ConfirmationMetadata
+      | PolicyMetadata
+    >
+  > {
     const validated = WaitForSelectorSchema.parse(input);
-    const page = await this.getActivePage();
+    const resolved = await this.getPageForInput(validated.tabId);
+    if (resolved.error) {
+      return resolved.error;
+    }
+    const { page } = resolved;
     const url = page.url();
 
     const policyDecision = enforcePolicy(
@@ -495,11 +555,36 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
+        ...fail('POLICY_BLOCKED', 'Wait blocked by policy.'),
+        data: { auditId, reasonCodes: policyDecision.reasonCodes },
+      };
+    }
+
+    const approved = this.consumeConfirmationIfApproved(
+      'wait_for_selector',
+      validated.confirmationId
+    );
+    if (policyDecision.requiresConfirmation && !approved) {
+      const pending = this.confirmations.create(
+        `Wait for ${validated.selector} on ${url}`,
+        'wait_for_selector'
+      );
+      const auditId = await this.auditLogger.logEvent({
+        toolName: 'wait_for_selector',
+        actionType: 'wait_for_selector',
+        url,
+        selector: validated.selector,
+        outcome: 'needs_confirmation',
         reasonCodes: policyDecision.reasonCodes,
-        message: 'Wait blocked by policy.',
-        auditId,
+      });
+      return {
+        ...fail('NEEDS_CONFIRMATION', 'Wait requires confirmation.'),
+        data: {
+          confirmationId: pending.id,
+          actionSummary: pending.summary,
+          auditId,
+          reasonCodes: policyDecision.reasonCodes,
+        },
       };
     }
 
@@ -508,26 +593,22 @@ export class MCPTools {
         timeout: validated.timeoutMs ?? 5000,
       });
       const title = await page.title();
-      return {
-        ok: true,
-        data: { found: true, url, title },
-        warnings: [],
-      };
+      return ok({ found: true, url, title });
     } catch {
       const title = await page.title();
-      return {
-        ok: true,
-        data: { found: false, url, title },
-        warnings: [],
-      };
+      return ok({ found: false, url, title });
     }
   }
 
   async waitForNavigation(
     input: WaitForNavigationInput
-  ): Promise<ToolResponse<{ url: string; title: string }>> {
+  ): Promise<ToolResponse<{ url: string; title: string } | ConfirmationMetadata | PolicyMetadata>> {
     const validated = WaitForNavigationSchema.parse(input);
-    const page = await this.getActivePage();
+    const resolved = await this.getPageForInput(validated.tabId);
+    if (resolved.error) {
+      return resolved.error;
+    }
+    const { page } = resolved;
     const url = page.url();
 
     const policyDecision = enforcePolicy(
@@ -549,11 +630,35 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
+        ...fail('POLICY_BLOCKED', 'Navigation wait blocked by policy.'),
+        data: { auditId, reasonCodes: policyDecision.reasonCodes },
+      };
+    }
+
+    const approved = this.consumeConfirmationIfApproved(
+      'wait_for_navigation',
+      validated.confirmationId
+    );
+    if (policyDecision.requiresConfirmation && !approved) {
+      const pending = this.confirmations.create(
+        `Wait for navigation on ${url}`,
+        'wait_for_navigation'
+      );
+      const auditId = await this.auditLogger.logEvent({
+        toolName: 'wait_for_navigation',
+        actionType: 'wait_for_navigation',
+        url,
+        outcome: 'needs_confirmation',
         reasonCodes: policyDecision.reasonCodes,
-        message: 'Navigation wait blocked by policy.',
-        auditId,
+      });
+      return {
+        ...fail('NEEDS_CONFIRMATION', 'Navigation wait requires confirmation.'),
+        data: {
+          confirmationId: pending.id,
+          actionSummary: pending.summary,
+          auditId,
+          reasonCodes: policyDecision.reasonCodes,
+        },
       };
     }
 
@@ -563,14 +668,24 @@ export class MCPTools {
     });
 
     const title = await page.title();
-    return { ok: true, data: { url: page.url(), title }, warnings: [] };
+    return ok({ url: page.url(), title });
   }
 
   async querySelectorAll(
     input: QuerySelectorAllInput
-  ): Promise<ToolResponse<{ items: { text: string; attrs: Record<string, string> }[] }>> {
+  ): Promise<
+    ToolResponse<
+      | { items: { text: string; attrs: Record<string, string> }[] }
+      | ConfirmationMetadata
+      | PolicyMetadata
+    >
+  > {
     const validated = QuerySelectorAllSchema.parse(input);
-    const page = await this.getActivePage();
+    const resolved = await this.getPageForInput(validated.tabId);
+    if (resolved.error) {
+      return resolved.error;
+    }
+    const { page } = resolved;
     const url = page.url();
 
     const policyDecision = enforcePolicy(
@@ -593,11 +708,36 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
+        ...fail('POLICY_BLOCKED', 'Query blocked by policy.'),
+        data: { auditId, reasonCodes: policyDecision.reasonCodes },
+      };
+    }
+
+    const approved = this.consumeConfirmationIfApproved(
+      'query_selector_all',
+      validated.confirmationId
+    );
+    if (policyDecision.requiresConfirmation && !approved) {
+      const pending = this.confirmations.create(
+        `Query ${validated.selector} on ${url}`,
+        'query_selector_all'
+      );
+      const auditId = await this.auditLogger.logEvent({
+        toolName: 'query_selector_all',
+        actionType: 'query_selector_all',
+        url,
+        selector: validated.selector,
+        outcome: 'needs_confirmation',
         reasonCodes: policyDecision.reasonCodes,
-        message: 'Query blocked by policy.',
-        auditId,
+      });
+      return {
+        ...fail('NEEDS_CONFIRMATION', 'Query requires confirmation.'),
+        data: {
+          confirmationId: pending.id,
+          actionSummary: pending.summary,
+          auditId,
+          reasonCodes: policyDecision.reasonCodes,
+        },
       };
     }
 
@@ -622,14 +762,24 @@ export class MCPTools {
       { attrs: attributes, limit: maxItems }
     )) as { text: string; attrs: Record<string, string> }[];
 
-    return { ok: true, data: { items }, warnings: [] };
+    return ok({ items });
   }
 
   async screenshotTab(
     input: ScreenshotInput
-  ): Promise<ToolResponse<{ screenshot?: string; path?: string; message: string }>> {
+  ): Promise<
+    ToolResponse<
+      | { screenshot?: string; path?: string; message: string; auditId?: string }
+      | ConfirmationMetadata
+      | PolicyMetadata
+    >
+  > {
     const validated = ScreenshotSchema.parse(input);
-    const page = await this.getActivePage();
+    const resolved = await this.getPageForInput(validated.tabId);
+    if (resolved.error) {
+      return resolved.error;
+    }
+    const { page } = resolved;
     const url = page.url();
 
     const policyDecision = enforcePolicy(
@@ -650,11 +800,32 @@ export class MCPTools {
         reasonCodes: policyDecision.reasonCodes,
       });
       return {
-        ok: false,
-        warnings: [],
+        ...fail('POLICY_BLOCKED', 'Screenshot blocked by policy.'),
+        data: { auditId, reasonCodes: policyDecision.reasonCodes },
+      };
+    }
+
+    const approved = this.consumeConfirmationIfApproved(
+      'screenshot_tab',
+      validated.confirmationId
+    );
+    if (policyDecision.requiresConfirmation && !approved) {
+      const pending = this.confirmations.create(`Take screenshot on ${url}`, 'screenshot_tab');
+      const auditId = await this.auditLogger.logEvent({
+        toolName: 'screenshot_tab',
+        actionType: 'screenshot',
+        url,
+        outcome: 'needs_confirmation',
         reasonCodes: policyDecision.reasonCodes,
-        message: 'Screenshot blocked by policy.',
-        auditId,
+      });
+      return {
+        ...fail('NEEDS_CONFIRMATION', 'Screenshot requires confirmation.'),
+        data: {
+          confirmationId: pending.id,
+          actionSummary: pending.summary,
+          auditId,
+          reasonCodes: policyDecision.reasonCodes,
+        },
       };
     }
 
@@ -671,46 +842,50 @@ export class MCPTools {
         outcome: 'allowed',
       });
 
-      return {
-        ok: true,
-        data: {
-          screenshot: validated.path ? undefined : screenshotStr,
-          path: validated.path,
-          message: validated.path
-            ? `Screenshot saved to: ${validated.path}`
-            : 'Screenshot captured as base64',
-        },
-        warnings: [],
+      return ok({
+        screenshot: validated.path ? undefined : screenshotStr,
+        path: validated.path,
+        message: validated.path
+          ? `Screenshot saved to: ${validated.path}`
+          : 'Screenshot captured as base64',
         auditId,
-      };
+      });
     } catch (error) {
-      return {
-        ok: false,
-        warnings: [],
-        message: `Failed to take screenshot: ${error instanceof Error ? error.message : String(error)}`,
-      };
+      return fail(
+        'ACTION_FAILED',
+        `Failed to take screenshot: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
-  async confirmAction(input: ConfirmActionInput): Promise<ToolResponse<unknown>> {
+  async confirmAction(
+    input: ConfirmActionInput
+  ): Promise<ToolResponse<{ confirmationId: string; actionSummary: string }>> {
     const validated = ConfirmActionSchema.parse(input);
-    if (validated.action === 'cancel') {
-      this.confirmations.consume(validated.confirmationToken);
-      return { ok: true, warnings: [], data: { cancelled: true } };
+    const approved = this.confirmations.approve(validated.confirmationId);
+    if (!approved) {
+      return fail('CONFIRMATION_EXPIRED', 'Confirmation ID expired or invalid.');
     }
 
-    const pending = this.confirmations.consume(validated.confirmationToken);
-    if (!pending) {
-      return { ok: false, warnings: [], message: 'Confirmation token expired or invalid.' };
+    return ok({ confirmationId: approved.id, actionSummary: approved.summary });
+  }
+
+  async denyAction(
+    input: DenyActionInput
+  ): Promise<ToolResponse<{ confirmationId: string; denied: boolean }>> {
+    const validated = DenyActionSchema.parse(input);
+    const denied = this.confirmations.deny(validated.confirmationId);
+    if (!denied) {
+      return fail('CONFIRMATION_EXPIRED', 'Confirmation ID expired or invalid.');
     }
 
-    return pending.execute();
+    return ok({ confirmationId: validated.confirmationId, denied: true });
   }
 
   async resetSession(): Promise<ToolResponse<{ reset: boolean }>> {
     this.session.reset();
     this.confirmations.clear();
-    return { ok: true, warnings: [], data: { reset: true } };
+    return ok({ reset: true });
   }
 
   async disconnect(): Promise<void> {
@@ -721,19 +896,27 @@ export class MCPTools {
     validated: NavigateAndExtractInput,
     page: Page
   ): Promise<
-    ToolResponse<{ url: string; title: string; markdown?: string; html?: string; truncated?: boolean }>
+    ToolResponse<
+      | {
+          url: string;
+          title: string;
+          markdown?: string;
+          html?: string;
+          truncated?: boolean;
+          auditId?: string;
+        }
+      | PolicyMetadata
+    >
   > {
     if (!this.session.recordStep()) {
       return {
-        ok: false,
-        warnings: [],
-        reasonCodes: ['max_steps_exceeded'],
-        message: 'Session step limit exceeded. Use reset_session to continue.',
+        ...fail('MAX_STEPS_EXCEEDED', 'Session step limit exceeded. Use reset_session to continue.'),
+        data: { reasonCodes: ['max_steps_exceeded'] },
       };
     }
 
     await page.goto(validated.url, { waitUntil: 'networkidle' });
-    this.lastUsedTabId = this.tabs.getId(page);
+    await this.tabs.markFocused(page);
 
     if (validated.extractionMode === 'raw_dom_sanitized') {
       const extracted = await this.markdownExtractor.extractSanitizedDom(page, {
@@ -750,17 +933,16 @@ export class MCPTools {
         outcome: 'confirmed',
       });
 
-      return {
-        ok: true,
-        data: {
+      return ok(
+        {
           url: extracted.url,
           title: extracted.title,
           html: extracted.html,
           truncated: extracted.truncated,
+          auditId,
         },
-        warnings,
-        auditId,
-      };
+        warnings
+      );
     }
 
     const extracted = await this.markdownExtractor.extractFromPage(page);
@@ -774,31 +956,24 @@ export class MCPTools {
       outcome: 'confirmed',
     });
 
-    return {
-      ok: true,
-      data: extracted,
-      warnings,
-      auditId,
-    };
+    return ok({ ...extracted, auditId }, warnings);
   }
 
   private async executeClick(
     validated: ClickElementInput,
     page: Page
-  ): Promise<ToolResponse<{ message: string }>> {
+  ): Promise<ToolResponse<{ message?: string; auditId?: string } | PolicyMetadata>> {
     if (!this.session.recordStep()) {
       return {
-        ok: false,
-        warnings: [],
-        reasonCodes: ['max_steps_exceeded'],
-        message: 'Session step limit exceeded. Use reset_session to continue.',
+        ...fail('MAX_STEPS_EXCEEDED', 'Session step limit exceeded. Use reset_session to continue.'),
+        data: { reasonCodes: ['max_steps_exceeded'] },
       };
     }
 
     try {
       await page.waitForSelector(validated.selector, { timeout: 5000 });
       await page.click(validated.selector);
-      this.lastUsedTabId = this.tabs.getId(page);
+      await this.tabs.markFocused(page);
       const auditId = await this.auditLogger.logEvent({
         toolName: 'click_element',
         actionType: 'click',
@@ -807,40 +982,33 @@ export class MCPTools {
         outcome: 'confirmed',
       });
 
-      return {
-        ok: true,
-        warnings: [],
-        data: {
-          message: `Clicked element: ${validated.selector}`,
-        },
+      return ok({
+        message: `Clicked element: ${validated.selector}`,
         auditId,
-      };
+      });
     } catch (error) {
-      return {
-        ok: false,
-        warnings: [],
-        message: `Failed to click element: ${error instanceof Error ? error.message : String(error)}`,
-      };
+      return fail(
+        'ACTION_FAILED',
+        `Failed to click element: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
   private async executeFill(
     validated: FillInputInput,
     page: Page
-  ): Promise<ToolResponse<{ message: string }>> {
+  ): Promise<ToolResponse<{ message?: string; auditId?: string } | PolicyMetadata>> {
     if (!this.session.recordStep()) {
       return {
-        ok: false,
-        warnings: [],
-        reasonCodes: ['max_steps_exceeded'],
-        message: 'Session step limit exceeded. Use reset_session to continue.',
+        ...fail('MAX_STEPS_EXCEEDED', 'Session step limit exceeded. Use reset_session to continue.'),
+        data: { reasonCodes: ['max_steps_exceeded'] },
       };
     }
 
     try {
       await page.waitForSelector(validated.selector, { timeout: 5000 });
       await page.fill(validated.selector, validated.value);
-      this.lastUsedTabId = this.tabs.getId(page);
+      await this.tabs.markFocused(page);
       const auditId = await this.auditLogger.logEvent({
         toolName: 'fill_input',
         actionType: 'fill',
@@ -849,38 +1017,31 @@ export class MCPTools {
         outcome: 'confirmed',
       });
 
-      return {
-        ok: true,
-        warnings: [],
-        data: {
-          message: `Filled input: ${validated.selector}`,
-        },
+      return ok({
+        message: `Filled input: ${validated.selector}`,
         auditId,
-      };
+      });
     } catch (error) {
-      return {
-        ok: false,
-        warnings: [],
-        message: `Failed to fill input: ${error instanceof Error ? error.message : String(error)}`,
-      };
+      return fail(
+        'ACTION_FAILED',
+        `Failed to fill input: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
   private async executeKeyboardType(
     validated: KeyboardTypeInput,
     page: Page
-  ): Promise<ToolResponse<{ message: string }>> {
+  ): Promise<ToolResponse<{ message?: string; auditId?: string } | PolicyMetadata>> {
     if (!this.session.recordStep()) {
       return {
-        ok: false,
-        warnings: [],
-        reasonCodes: ['max_steps_exceeded'],
-        message: 'Session step limit exceeded. Use reset_session to continue.',
+        ...fail('MAX_STEPS_EXCEEDED', 'Session step limit exceeded. Use reset_session to continue.'),
+        data: { reasonCodes: ['max_steps_exceeded'] },
       };
     }
 
     await page.keyboard.type(validated.text);
-    this.lastUsedTabId = this.tabs.getId(page);
+    await this.tabs.markFocused(page);
     const auditId = await this.auditLogger.logEvent({
       toolName: 'keyboard_type',
       actionType: 'keyboard_type',
@@ -888,29 +1049,22 @@ export class MCPTools {
       outcome: 'confirmed',
     });
 
-    return {
-      ok: true,
-      warnings: [],
-      data: { message: 'Typed text via keyboard.' },
-      auditId,
-    };
+    return ok({ message: 'Typed text via keyboard.', auditId });
   }
 
   private async executePressKey(
     validated: PressKeyInput,
     page: Page
-  ): Promise<ToolResponse<{ message: string }>> {
+  ): Promise<ToolResponse<{ message?: string; auditId?: string } | PolicyMetadata>> {
     if (!this.session.recordStep()) {
       return {
-        ok: false,
-        warnings: [],
-        reasonCodes: ['max_steps_exceeded'],
-        message: 'Session step limit exceeded. Use reset_session to continue.',
+        ...fail('MAX_STEPS_EXCEEDED', 'Session step limit exceeded. Use reset_session to continue.'),
+        data: { reasonCodes: ['max_steps_exceeded'] },
       };
     }
 
     await page.keyboard.press(validated.key);
-    this.lastUsedTabId = this.tabs.getId(page);
+    await this.tabs.markFocused(page);
     const auditId = await this.auditLogger.logEvent({
       toolName: 'press_key',
       actionType: 'press_key',
@@ -918,12 +1072,7 @@ export class MCPTools {
       outcome: 'confirmed',
     });
 
-    return {
-      ok: true,
-      warnings: [],
-      data: { message: `Pressed key: ${validated.key}` },
-      auditId,
-    };
+    return ok({ message: `Pressed key: ${validated.key}`, auditId });
   }
 
   private getInjectionWarnings(content: string): string[] {
@@ -945,31 +1094,33 @@ export class MCPTools {
     }
   }
 
-  private async getActivePage(): Promise<Page> {
+  private async getPageForInput(tabId?: string): Promise<PageResolution> {
     const pages = await this.browserConnection.getAllTabs();
     if (pages.length === 0) {
-      throw new Error('No tabs found in the browser');
+      return { error: fail('NO_TABS', 'No tabs found in the browser') };
     }
 
-    this.tabs.refresh(pages);
+    await this.tabs.refresh(pages);
 
-    const activeTabId = this.session.getActiveTabId();
-    if (activeTabId) {
-      const active = this.tabs.getPage(activeTabId);
-      if (active) {
-        return active;
+    if (tabId) {
+      const page = this.tabs.getPage(tabId);
+      if (!page) {
+        return { error: fail('TAB_NOT_FOUND', 'Tab not found') };
       }
+      await this.tabs.markFocused(page);
+      return { page };
     }
 
-    if (this.lastUsedTabId) {
-      const lastUsed = this.tabs.getPage(this.lastUsedTabId);
-      if (lastUsed) {
-        return lastUsed;
-      }
-    }
+    const page = await this.tabs.getActivePage(pages);
+    await this.tabs.markFocused(page);
+    return { page };
+  }
 
-    const nonExtension = pages.find((page) => !isExtensionUrl(page.url()));
-    return nonExtension ?? pages[pages.length - 1];
+  private consumeConfirmationIfApproved(toolName: string, confirmationId?: string): boolean {
+    if (!confirmationId) {
+      return false;
+    }
+    return Boolean(this.confirmations.consumeApproved(confirmationId, toolName));
   }
 
   private async safeGetElementText(page: Page, selector: string): Promise<string | undefined> {
@@ -979,8 +1130,4 @@ export class MCPTools {
       return undefined;
     }
   }
-}
-
-function isExtensionUrl(url: string): boolean {
-  return url.startsWith('chrome-extension://') || url.startsWith('chrome://');
 }

@@ -23,8 +23,8 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "type-check": "tsc --noEmit",
-    "test": "node --test dist/tests",
-    "test:milestone1": "node dist/test-connection.js"
+    "test": "pnpm run build && node --test dist/tests",
+    "test:milestone1": "pnpm run build && node dist/test-connection.js"
   },
   "keywords": [
     "electron",
