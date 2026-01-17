@@ -29,7 +29,29 @@ export function redactUrl(url: string): string {
       }
     }
     const search = redactedParams.toString();
-    return `${parsed.origin}${parsed.pathname}${search ? `?${search}` : ''}`;
+    
+    // Redact URL fragments
+    let redactedHash = '';
+    if (parsed.hash) {
+      const hashContent = parsed.hash.slice(1); // Strip leading '#'
+      try {
+        const hashParams = new URLSearchParams(hashContent);
+        for (const key of hashParams.keys()) {
+          if (isSensitiveKey(key)) {
+            hashParams.set(key, REDACTED);
+          }
+        }
+        const hashString = hashParams.toString();
+        if (hashString) {
+          redactedHash = `#${hashString}`;
+        }
+      } catch {
+        // If hash is not valid URLSearchParams, keep original if non-sensitive
+        redactedHash = parsed.hash;
+      }
+    }
+    
+    return `${parsed.origin}${parsed.pathname}${search ? `?${search}` : ''}${redactedHash}`;
   } catch {
     return url;
   }

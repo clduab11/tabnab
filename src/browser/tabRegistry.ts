@@ -51,12 +51,13 @@ export class TabRegistry {
     this.lastFocusedTabId = await this.getId(page);
   }
 
-  async getActivePage(pages: Page[]): Promise<Page> {
+  async getActivePage(pages: Page[]): Promise<Page | undefined> {
     await this.refresh(pages);
 
     // Active tab strategy: prefer a focused page if detectable (document.hasFocus),
     // otherwise fall back to the last focused tab we observed, otherwise choose the
-    // first non-extension/non-devtools tab.
+    // first non-extension/non-devtools/non-blank tab, finally fall back to the most
+    // recent page (last in the list) to match BrowserConnection.getActiveTab() behavior.
     const focused = await this.findFocusedPage(pages);
     if (focused) {
       return focused;
@@ -69,13 +70,21 @@ export class TabRegistry {
       }
     }
 
-    const nonExtension = pages.find((page) => !isIgnoredUrl(page.url()));
-    return nonExtension ?? pages[0];
+    const nonIgnored = pages.find((page) => {
+      const url = page.url();
+      return !isIgnoredUrl(url) && url !== 'about:blank';
+    });
+    if (nonIgnored) {
+      return nonIgnored;
+    }
+    
+    // Fallback to last page (most recent) to match BrowserConnection.getActiveTab()
+    return pages[pages.length - 1];
   }
 
   async listTabs(pages: Page[]): Promise<TabSummary[]> {
     const activePage = await this.getActivePage(pages);
-    const activeId = await this.getId(activePage);
+    const activeId = activePage ? await this.getId(activePage) : null;
 
     return Promise.all(
       pages.map(async (page) => {
@@ -97,7 +106,8 @@ export class TabRegistry {
   private async findFocusedPage(pages: Page[]): Promise<Page | null> {
     const focusStates = await Promise.all(
       pages.map(async (page) => {
-        if (isIgnoredUrl(page.url())) {
+        const url = page.url();
+        if (isIgnoredUrl(url) || url === 'about:blank') {
           return false;
         }
         try {
