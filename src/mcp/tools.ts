@@ -839,8 +839,7 @@ export class MCPTools {
 
     try {
       await page.waitForSelector(validated.selector, { timeout: 5000 });
-      await page.fill(validated.selector, '');
-      await page.type(validated.selector, validated.value);
+      await page.fill(validated.selector, validated.value);
       this.lastUsedTabId = this.tabs.getId(page);
       const auditId = await this.auditLogger.logEvent({
         toolName: 'fill_input',
