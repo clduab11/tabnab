@@ -158,4 +158,13 @@ test('browser tools integration', async (t) => {
     confirmationId,
   });
   assert.equal(approvedClick.ok, true);
+
+  // Verify one-time-use semantics: reusing the same confirmationId should fail
+  const reusedClick = await tools.clickElement({
+    selector: '#delete-account',
+    tabId: active.tabId,
+    confirmationId,
+  });
+  assert.equal(reusedClick.ok, false);
+  assert.equal(reusedClick.error?.code, 'NEEDS_CONFIRMATION');
 });

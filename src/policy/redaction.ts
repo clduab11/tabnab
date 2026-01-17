@@ -51,7 +51,7 @@ export function redactUrl(url: string): string {
         let safeHash = hashContent;
         for (const param of SENSITIVE_QUERY_PARAMS) {
           // Match patterns like "token=value" or "token:value" in the hash
-          const regex = new RegExp(`(${param}[=:][^&/#]*)`,' gi');
+          const regex = new RegExp(`(${param}[=:][^&/#]*)`, 'gi');
           safeHash = safeHash.replace(regex, `${param}=${REDACTED}`);
         }
         redactedHash = safeHash ? `#${safeHash}` : '';

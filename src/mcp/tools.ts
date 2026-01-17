@@ -168,7 +168,12 @@ export class MCPTools {
   }
 
   async activateTab(input: ActivateTabInput): Promise<ToolResponse<{ tabId: string }>> {
-    const validated = ActivateTabSchema.parse(input);
+    const result = ActivateTabSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const pages = await this.browserConnection.getAllTabs();
     if (pages.length === 0) {
       return fail('NO_TABS', 'No tabs found in the browser');
@@ -203,7 +208,12 @@ export class MCPTools {
       | PolicyMetadata
     >
   > {
-    const validated = NavigateAndExtractSchema.parse(input);
+    const result = NavigateAndExtractSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const resolved = await this.getPageForInput(validated.tabId);
     if (resolved.error) {
       return resolved.error;
@@ -267,7 +277,12 @@ export class MCPTools {
   async clickElement(
     input: ClickElementInput
   ): Promise<ToolResponse<{ message?: string; auditId?: string } | ConfirmationMetadata | PolicyMetadata>> {
-    const validated = ClickElementSchema.parse(input);
+    const result = ClickElementSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const resolved = await this.getPageForInput(validated.tabId);
     if (resolved.error) {
       return resolved.error;
@@ -336,7 +351,12 @@ export class MCPTools {
   async fillInput(
     input: FillInputInput
   ): Promise<ToolResponse<{ message?: string; auditId?: string } | ConfirmationMetadata | PolicyMetadata>> {
-    const validated = FillInputSchema.parse(input);
+    const result = FillInputSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const resolved = await this.getPageForInput(validated.tabId);
     if (resolved.error) {
       return resolved.error;
@@ -400,7 +420,12 @@ export class MCPTools {
   async keyboardType(
     input: KeyboardTypeInput
   ): Promise<ToolResponse<{ message?: string; auditId?: string } | ConfirmationMetadata | PolicyMetadata>> {
-    const validated = KeyboardTypeSchema.parse(input);
+    const result = KeyboardTypeSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const resolved = await this.getPageForInput(validated.tabId);
     if (resolved.error) {
       return resolved.error;
@@ -461,7 +486,12 @@ export class MCPTools {
   async pressKey(
     input: PressKeyInput
   ): Promise<ToolResponse<{ message?: string; auditId?: string } | ConfirmationMetadata | PolicyMetadata>> {
-    const validated = PressKeySchema.parse(input);
+    const result = PressKeySchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const resolved = await this.getPageForInput(validated.tabId);
     if (resolved.error) {
       return resolved.error;
@@ -526,7 +556,12 @@ export class MCPTools {
       | PolicyMetadata
     >
   > {
-    const validated = WaitForSelectorSchema.parse(input);
+    const result = WaitForSelectorSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const resolved = await this.getPageForInput(validated.tabId);
     if (resolved.error) {
       return resolved.error;
@@ -603,7 +638,12 @@ export class MCPTools {
   async waitForNavigation(
     input: WaitForNavigationInput
   ): Promise<ToolResponse<{ url: string; title: string } | ConfirmationMetadata | PolicyMetadata>> {
-    const validated = WaitForNavigationSchema.parse(input);
+    const result = WaitForNavigationSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const resolved = await this.getPageForInput(validated.tabId);
     if (resolved.error) {
       return resolved.error;
@@ -680,7 +720,12 @@ export class MCPTools {
       | PolicyMetadata
     >
   > {
-    const validated = QuerySelectorAllSchema.parse(input);
+    const result = QuerySelectorAllSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const resolved = await this.getPageForInput(validated.tabId);
     if (resolved.error) {
       return resolved.error;
@@ -774,7 +819,12 @@ export class MCPTools {
       | PolicyMetadata
     >
   > {
-    const validated = ScreenshotSchema.parse(input);
+    const result = ScreenshotSchema.safeParse(input);
+    if (!result.success) {
+      const errorMessages = result.error.issues.map((issue) => issue.message).join(', ');
+      return fail('INVALID_INPUT', `Validation failed: ${errorMessages}`);
+    }
+    const validated = result.data;
     const resolved = await this.getPageForInput(validated.tabId);
     if (resolved.error) {
       return resolved.error;
