@@ -46,8 +46,15 @@ export function redactUrl(url: string): string {
           redactedHash = `#${hashString}`;
         }
       } catch {
-        // If hash is not valid URLSearchParams, keep original if non-sensitive
-        redactedHash = parsed.hash;
+        // If hash is not valid URLSearchParams, apply basic string redaction
+        // by checking for common token patterns in the hash
+        let safeHash = hashContent;
+        for (const param of SENSITIVE_QUERY_PARAMS) {
+          // Match patterns like "token=value" or "token:value" in the hash
+          const regex = new RegExp(`(${param}[=:][^&/#]*)`,' gi');
+          safeHash = safeHash.replace(regex, `${param}=${REDACTED}`);
+        }
+        redactedHash = safeHash ? `#${safeHash}` : '';
       }
     }
     
