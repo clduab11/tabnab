@@ -98,8 +98,8 @@ export type WaitForNavigationInput = z.infer<typeof WaitForNavigationSchema>;
 export type QuerySelectorAllInput = z.infer<typeof QuerySelectorAllSchema>;
 export type KeyboardTypeInput = z.infer<typeof KeyboardTypeSchema>;
 export type PressKeyInput = z.infer<typeof PressKeySchema>;
-export type ConfirmActionInput = z.input<typeof ConfirmActionSchema>;
-export type DenyActionInput = z.input<typeof DenyActionSchema>;
+export type ConfirmActionInput = z.infer<typeof ConfirmActionSchema>;
+export type DenyActionInput = z.infer<typeof DenyActionSchema>;
 
 type PolicyMetadata = {
   auditId?: string;
