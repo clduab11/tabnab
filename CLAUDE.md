@@ -29,8 +29,8 @@ src/
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `BrowserConnection` | `src/browser/connection.ts` | Manages puppeteer-core connection to Chrome |
-| `MCPTools` | `src/mcp/tools.ts` | Implements all 5 MCP tools with validation |
+| `BrowserConnection` | `src/browser/connection.ts` | Manages Playwright CDP connection to Chrome |
+| `MCPTools` | `src/mcp/tools.ts` | Implements MCP tools with validation and policy gates |
 | `MarkdownExtractor` | `src/extraction/markdown.ts` | HTML → Markdown using Readability + Turndown |
 | `McpServer` | `src/mcp/server.ts` | MCP protocol handler with stdio transport |
 
@@ -40,7 +40,7 @@ src/
 |------------|---------|---------|
 | TypeScript | ^5.7 | Type-safe development (strict mode) |
 | Electron | ^33.2 | Menu bar desktop application |
-| puppeteer-core | ^23.10 | Browser automation via CDP |
+| Playwright | ^1.54 | Browser automation via CDP |
 | @modelcontextprotocol/sdk | ^0.5 | MCP protocol implementation |
 | @mozilla/readability | ^0.6 | Intelligent content extraction |
 | turndown | ^7.2 | HTML to Markdown conversion |
@@ -81,29 +81,29 @@ pnpm run test:milestone1
 ### 1. `get_active_tab`
 Returns URL and title of the active browser tab.
 - **Input**: None
-- **Success Output**: `{ success: true, url: string, title: string }`
-- **Error Output**: `{ success: false, message: string }`
+- **Success Output**: `{ ok: true, data: { url: string, title: string }, warnings: [] }`
+- **Error Output**: `{ ok: false, message: string, warnings: [] }`
 
 ### 2. `navigate_and_extract`
-Navigate to URL and extract page content as clean Markdown.
-- **Input**: `{ url: string }` (Zod-validated URL)
-- **Success Output**: `{ success: true, url: string, title: string, markdown: string }`
-- **Error Output**: `{ success: false, message: string }`
+Navigate to URL and extract page content as clean Markdown or sanitized DOM.
+- **Input**: `{ url: string, extractionMode?: "readability_markdown" | "raw_dom_sanitized" }`
+- **Success Output**: `{ ok: true, data: { url: string, title: string, markdown?: string, html?: string } }`
+- **Error Output**: `{ ok: false, message: string }`
 
 ### 3. `click_element`
 Click element using CSS selector.
 - **Input**: `{ selector: string }` (non-empty)
-- **Output**: `{ success: boolean, message: string }`
+- **Output**: `{ ok: boolean, data?: { message: string }, warnings: [] }`
 
 ### 4. `fill_input`
 Fill input field (clears existing content first).
 - **Input**: `{ selector: string, value: string }`
-- **Output**: `{ success: boolean, message: string }`
+- **Output**: `{ ok: boolean, data?: { message: string }, warnings: [] }`
 
 ### 5. `screenshot_tab`
 Capture screenshot of current tab.
 - **Input**: `{ fullPage?: boolean, path?: string }`
-- **Output**: `{ success: boolean, screenshot?: string, path?: string, message: string }`
+- **Output**: `{ ok: boolean, data?: { screenshot?: string, path?: string, message: string }, warnings: [] }`
 
 ## Code Style & Conventions
 
@@ -144,7 +144,7 @@ const page = await this.browserConnection.getActiveTab();
 
 ## Prerequisites for Development
 
-1. **Node.js 18+** and **pnpm** installed
+1. **Node.js 22+** and **pnpm** installed
 2. **Chrome/Chromium** running with remote debugging:
    ```bash
    ./scripts/start-chrome.sh  # macOS/Linux

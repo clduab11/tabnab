@@ -1,12 +1,20 @@
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
-import type { Page } from 'puppeteer-core';
+import type { Page } from 'playwright';
 import TurndownService from 'turndown';
+import { sanitizeDom, type DomSanitizeOptions, type SanitizedDomResult } from './dom.js';
 
 export interface ExtractedContent {
   title: string;
   markdown: string;
   url: string;
+}
+
+export interface ExtractedDomContent {
+  title: string;
+  url: string;
+  html: string;
+  truncated: boolean;
 }
 
 export class MarkdownExtractor {
@@ -65,5 +73,22 @@ export class MarkdownExtractor {
 
   async extractRawHtml(page: Page): Promise<string> {
     return page.content();
+  }
+
+  async extractSanitizedDom(
+    page: Page,
+    options: DomSanitizeOptions = {}
+  ): Promise<ExtractedDomContent> {
+    const url = page.url();
+    const title = await page.title();
+    const html = await page.content();
+    const sanitized = sanitizeDom(html, options);
+
+    return {
+      title,
+      url,
+      html: sanitized.html,
+      truncated: sanitized.truncated,
+    };
   }
 }

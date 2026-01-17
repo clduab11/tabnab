@@ -4,7 +4,10 @@
       "command": "node",
       "args": ["/absolute/path/to/tabnab/dist/mcp/index.js"],
       "env": {
-        "CHROME_DEBUG_PORT": "9222"
+        "CHROME_DEBUG_PORT": "9222",
+        "TABNAB_ALLOWED_DOMAINS": "example.com,app.example.com",
+        "TABNAB_CONFIRMATION_MODE": "confirm-on-sensitive",
+        "TABNAB_AUDIT_LOG_PATH": "/tmp/tabnab-audit.log"
       }
     }
   }

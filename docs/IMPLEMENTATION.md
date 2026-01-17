@@ -21,7 +21,7 @@ tabnab/
 
 #### 1. Browser Connection (`src/browser/connection.ts`)
 - Connects to Chrome via remote debugging port (9222)
-- Uses puppeteer-core for browser automation
+- Uses Playwright (Chromium over CDP) for browser automation
 - Retrieves active tab and all open tabs
 - Handles connection lifecycle
 
@@ -34,7 +34,7 @@ tabnab/
 #### 3. MCP Server (`src/mcp/server.ts`)
 - Implements Model Context Protocol server
 - Handles stdio transport for communication with MCP clients
-- Defines 5 tools with proper JSON schemas
+- Defines tool schemas with policy enforcement and confirmation flow
 - Error handling and validation
 
 #### 4. MCP Tools (`src/mcp/tools.ts`)
@@ -43,11 +43,20 @@ All tools use Zod for input validation:
 
 | Tool | Description | Input | Output |
 |------|-------------|-------|--------|
-| `get_active_tab` | Get active tab URL and title | None | `{ url, title }` |
-| `navigate_and_extract` | Navigate and extract Markdown | `{ url }` | `{ url, title, markdown }` |
-| `click_element` | Click element by CSS selector | `{ selector }` | `{ success, message }` |
-| `fill_input` | Fill input field (clears first) | `{ selector, value }` | `{ success, message }` |
-| `screenshot_tab` | Capture screenshot | `{ fullPage?, path? }` | `{ success, screenshot?, path?, message }` |
+| `get_active_tab` | Get active tab URL and title | None | `{ ok, data }` |
+| `list_tabs` | List all open tabs | None | `{ ok, data }` |
+| `activate_tab` | Set active tab | `{ tabId }` | `{ ok, data }` |
+| `navigate_and_extract` | Navigate and extract Markdown/DOM | `{ url, extractionMode? }` | `{ ok, data }` |
+| `click_element` | Click element by CSS selector | `{ selector }` | `{ ok, data }` |
+| `fill_input` | Fill input field (clears first) | `{ selector, value }` | `{ ok, data }` |
+| `keyboard_type` | Type text | `{ text }` | `{ ok, data }` |
+| `press_key` | Press key | `{ key }` | `{ ok, data }` |
+| `wait_for_selector` | Wait for selector | `{ selector, timeoutMs? }` | `{ ok, data }` |
+| `wait_for_navigation` | Wait for navigation | `{ timeoutMs?, waitUntil? }` | `{ ok, data }` |
+| `query_selector_all` | Extract text/attrs | `{ selector, attributes?, maxItems? }` | `{ ok, data }` |
+| `screenshot_tab` | Capture screenshot | `{ fullPage?, path? }` | `{ ok, data }` |
+| `confirm_action` | Confirm/cancel pending action | `{ confirmationToken, action? }` | `{ ok, data }` |
+| `reset_session` | Reset step counter | None | `{ ok, data }` |
 
 #### 5. Electron App (`src/main/index.ts`)
 - Menu bar application for macOS, Linux, and Windows
@@ -64,13 +73,13 @@ All tools use Zod for input validation:
 
 ## Technical Stack
 
-- **TypeScript 5.9** with strict mode
+- **TypeScript 5.8** with strict mode
 - **pnpm** for package management
 - **Biome** for linting and formatting
-- **Zod 3.25** for runtime validation
-- **Puppeteer Core 23.11** for browser automation
-- **Electron 33.4** for desktop app
-- **MCP SDK 0.5** for protocol implementation
+- **Zod 4.3** for runtime validation
+- **Playwright 1.54** for browser automation
+- **Electron 39** for desktop app
+- **MCP SDK 1.25** for protocol implementation
 - **Mozilla Readability 0.6** for content extraction
 - **Turndown 7.2** for HTML to Markdown conversion
 
@@ -161,7 +170,7 @@ await page.type(selector, value);
 ```
 
 ### 3. Connection to Existing Browser
-Using puppeteer-core instead of puppeteer allows connecting to an existing Chrome instance:
+Using Playwright's `chromium.connectOverCDP` allows connecting to an existing Chrome instance:
 - Preserves user's cookies and sessions
 - Works with authenticated websites
 - No need to manage a separate browser instance

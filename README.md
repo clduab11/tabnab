@@ -43,7 +43,7 @@ TabNab bridges the gap between AI agents (Claude, Cursor, Windsurf) and your **r
 
 ### 🔐 **Authenticated Access**
 
-Connect to your real Chrome browser with all your cookies & sessions intact. No password sharing required.
+Connect to your real Chrome browser with all your cookies & sessions intact via Playwright (CDP). No password sharing required.
 
 </td>
 <td align="center" width="33%">
@@ -55,9 +55,9 @@ Uses Readability.js + Turndown to convert messy HTML into pristine Markdown for 
 </td>
 <td align="center" width="33%">
 
-### 🎨 **5 MCP Tools**
+### 🎨 **Expanded MCP Tools**
 
-Complete browser automation via MCP protocol: get, navigate, click, fill, screenshot.
+Complete browser automation via MCP protocol: tabs, navigation, extraction, query, keyboard, screenshots, and confirmations.
 
 </td>
 </tr>
@@ -75,13 +75,15 @@ Complete browser automation via MCP protocol: get, navigate, click, fill, screen
 
 ### 2️⃣ Start Chrome with Remote Debugging
 
+> **Recommendation:** Use a dedicated Chrome profile for TabNab automation to isolate cookies and session data.
+
 <details>
 <summary><b>macOS</b></summary>
 
 ```bash
 ./scripts/start-chrome.sh
-# or manually:
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+# or manually (dedicated profile recommended):
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="$HOME/Library/Application Support/TabNab-Chrome"
 ```
 </details>
 
@@ -90,8 +92,8 @@ Complete browser automation via MCP protocol: get, navigate, click, fill, screen
 
 ```bash
 ./scripts/start-chrome.sh
-# or manually:
-google-chrome --remote-debugging-port=9222
+# or manually (dedicated profile recommended):
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.config/tabnab-chrome"
 ```
 </details>
 
@@ -100,8 +102,8 @@ google-chrome --remote-debugging-port=9222
 
 ```powershell
 .\scripts\start-chrome.ps1
-# or manually:
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+# or manually (dedicated profile recommended):
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="%LOCALAPPDATA%\TabNabChrome"
 ```
 </details>
 
@@ -113,6 +115,8 @@ cd tabnab
 pnpm install
 pnpm run build
 ```
+
+> TabNab uses Playwright to attach to your existing Chrome via CDP. No extra browser download is required.
 
 ### 4️⃣ Test the Connection
 
@@ -146,7 +150,10 @@ Configure TabNab as an MCP server in your AI agent client.
       "command": "node",
       "args": ["/absolute/path/to/tabnab/dist/mcp/index.js"],
       "env": {
-        "CHROME_DEBUG_PORT": "9222"
+        "CHROME_DEBUG_PORT": "9222",
+        "TABNAB_ALLOWED_DOMAINS": "example.com,app.example.com",
+        "TABNAB_CONFIRMATION_MODE": "confirm-on-sensitive",
+        "TABNAB_AUDIT_LOG_PATH": "/tmp/tabnab-audit.log"
       }
     }
   }
@@ -172,15 +179,24 @@ Launches TabNab as a menu bar application.
 
 ## 🛠️ Available Tools
 
-TabNab provides 5 powerful MCP tools for browser automation:
+TabNab provides a focused set of MCP tools for browser automation with policy enforcement:
 
 | Tool | Description | Input | Output |
 |------|-------------|-------|--------|
-| **`get_active_tab`** | Get URL and title of active tab | None | `{ url, title }` |
-| **`navigate_and_extract`** | Navigate to URL and extract clean Markdown | `{ url }` | `{ url, title, markdown }` |
-| **`click_element`** | Click element using CSS selector | `{ selector }` | `{ success, message }` |
-| **`fill_input`** | Fill input field with value | `{ selector, value }` | `{ success, message }` |
-| **`screenshot_tab`** | Capture screenshot of current tab | `{ fullPage?, path? }` | `{ success, screenshot?, path? }` |
+| **`get_active_tab`** | Get URL and title of active tab | None | `{ ok, data: { url, title } }` |
+| **`list_tabs`** | List all open tabs | None | `{ ok, data: [{ tabId, url, title }] }` |
+| **`activate_tab`** | Set active tab | `{ tabId }` | `{ ok, data: { tabId } }` |
+| **`navigate_and_extract`** | Navigate and extract (Markdown or sanitized DOM) | `{ url, extractionMode?, includeWarnings? }` | `{ ok, data: { url, title, markdown? html? } }` |
+| **`click_element`** | Click an element | `{ selector }` | `{ ok, data: { message } }` |
+| **`fill_input`** | Fill an input | `{ selector, value }` | `{ ok, data: { message } }` |
+| **`keyboard_type`** | Type text | `{ text }` | `{ ok, data: { message } }` |
+| **`press_key`** | Press a key | `{ key }` | `{ ok, data: { message } }` |
+| **`wait_for_selector`** | Wait for selector | `{ selector, timeoutMs? }` | `{ ok, data: { found, url, title } }` |
+| **`wait_for_navigation`** | Wait for navigation | `{ timeoutMs?, waitUntil? }` | `{ ok, data: { url, title } }` |
+| **`query_selector_all`** | Extract text/attrs for lists/tables | `{ selector, attributes?, maxItems? }` | `{ ok, data: { items } }` |
+| **`screenshot_tab`** | Capture screenshot | `{ fullPage?, path? }` | `{ ok, data: { screenshot?, path?, message } }` |
+| **`confirm_action`** | Confirm/cancel pending actions | `{ confirmationToken, action? }` | `{ ok, data }` |
+| **`reset_session`** | Reset step counter | None | `{ ok, data: { reset } }` |
 
 <details>
 <summary><b>🔍 Tool Details: get_active_tab</b></summary>
@@ -190,8 +206,12 @@ Returns the URL and title of the currently active browser tab.
 **Example Output:**
 ```json
 {
-  "url": "https://github.com/clduab11/tabnab",
-  "title": "TabNab - GitHub"
+  "ok": true,
+  "data": {
+    "url": "https://github.com/clduab11/tabnab",
+    "title": "TabNab - GitHub"
+  },
+  "warnings": []
 }
 ```
 </details>
@@ -199,21 +219,26 @@ Returns the URL and title of the currently active browser tab.
 <details>
 <summary><b>🧭 Tool Details: navigate_and_extract</b></summary>
 
-Navigate to a URL and extract clean Markdown content using Readability.js.
+Navigate to a URL and extract clean Markdown content using Readability.js (or sanitized DOM).
 
 **Example Input:**
 ```json
 {
-  "url": "https://example.com/article"
+  "url": "https://example.com/article",
+  "extractionMode": "readability_markdown"
 }
 ```
 
 **Example Output:**
 ```json
 {
-  "url": "https://example.com/article",
-  "title": "Article Title",
-  "markdown": "# Article Title\n\nClean extracted content..."
+  "ok": true,
+  "data": {
+    "url": "https://example.com/article",
+    "title": "Article Title",
+    "markdown": "# Article Title\n\nClean extracted content..."
+  },
+  "warnings": []
 }
 ```
 </details>
@@ -227,6 +252,17 @@ Click an element on the current page using a CSS selector.
 ```json
 {
   "selector": "button.submit-btn"
+}
+```
+
+**Example Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "message": "Clicked element: button.submit-btn"
+  },
+  "warnings": []
 }
 ```
 </details>
@@ -243,6 +279,17 @@ Fill an input field with the specified value. Clears existing content first.
   "value": "user@example.com"
 }
 ```
+
+**Example Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "message": "Filled input: input[name='email']"
+  },
+  "warnings": []
+}
+```
 </details>
 
 <details>
@@ -257,7 +304,40 @@ Take a screenshot of the current tab. Returns base64-encoded data if no path spe
   "path": "/path/to/screenshot.png"
 }
 ```
+
+**Example Output:**
+```json
+{
+  "ok": true,
+  "data": {
+    "path": "/path/to/screenshot.png",
+    "message": "Screenshot saved to: /path/to/screenshot.png"
+  },
+  "warnings": []
+}
+```
 </details>
+
+---
+
+## 🛡️ Policy & Safety Defaults
+
+TabNab enforces a **domain allowlist** and **confirmation gates** by default. Actions that are blocked return `ok: false` with `reasonCodes`.
+
+**Environment Variables:**
+- `TABNAB_ALLOWED_DOMAINS="example.com,app.example.com"` (required for navigation/click/fill)
+- `TABNAB_ALLOWED_PATH_PREFIXES="example.com:/billing;example.com:/settings"`
+- `TABNAB_CONFIRMATION_MODE="auto|confirm-on-navigation|confirm-on-sensitive|always-confirm"`
+- `TABNAB_AUDIT_LOG_PATH="/tmp/tabnab-audit.log"`
+- `TABNAB_AUDIT_LOG_SELECTOR_MODE="truncate|hash|plaintext"`
+- `TABNAB_MAX_STEPS="30"`
+
+**Confirmation Flow:**
+1. A tool may return `status: "needs_confirmation"` with a `confirmation_token`.
+2. Call `confirm_action` to proceed or cancel.
+
+**Prompt-Injection Warnings:**
+Extraction tools scan extracted content for instruction-like phrases and return warnings when detected.
 
 ---
 
@@ -281,7 +361,7 @@ graph TB
 /src
   /main       - Electron menu bar application entry point
   /mcp        - MCP server implementation (stdio transport)
-  /browser    - Chrome DevTools Protocol connection manager
+  /browser    - Chrome DevTools Protocol connection manager (Playwright CDP)
   /extraction - HTML to Markdown conversion (Readability + Turndown)
 ```
 
@@ -379,7 +459,7 @@ pnpm run dev
 |------------|---------|
 | **TypeScript 5.8** | Type-safe development with strict mode |
 | **Electron 39** | Menu bar desktop application |
-| **Puppeteer Core** | Browser automation via Chrome DevTools Protocol |
+| **Playwright** | Browser automation via Chrome DevTools Protocol |
 | **MCP SDK** | Model Context Protocol implementation |
 | **Readability.js** | Intelligent content extraction from web pages |
 | **Turndown** | HTML to Markdown conversion |
