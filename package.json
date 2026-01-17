@@ -23,13 +23,14 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "type-check": "tsc --noEmit",
+    "test": "node --test dist/tests",
     "test:milestone1": "node dist/test-connection.js"
   },
   "keywords": [
     "electron",
     "mcp",
     "browser-automation",
-    "puppeteer"
+    "playwright"
   ],
   "author": "",
   "license": "SEE LICENSE IN LICENSE",
@@ -41,7 +42,7 @@
     "@mozilla/readability": "^0.6.0",
     "electron": "^39.2.7",
     "jsdom": "^27.4.0",
-    "puppeteer-core": "^24.35.0",
+    "playwright": "^1.54.2",
     "turndown": "^7.2.0",
     "zod": "^4.3.5"
   },

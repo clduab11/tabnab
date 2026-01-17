@@ -44,15 +44,46 @@ export class TabNabMCPServer {
             },
           },
           {
+            name: 'list_tabs',
+            description: 'List all open tabs with their IDs, URLs, and titles',
+            inputSchema: {
+              type: 'object',
+              properties: {},
+              required: [],
+            },
+          },
+          {
+            name: 'activate_tab',
+            description: 'Set the active tab by ID',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                tabId: {
+                  type: 'string',
+                  description: 'Tab identifier returned by list_tabs',
+                },
+              },
+              required: ['tabId'],
+            },
+          },
+          {
             name: 'navigate_and_extract',
             description:
-              'Navigate to a URL and extract the page content as clean Markdown using Readability.js',
+              'Navigate to a URL and extract the page content as Markdown or sanitized DOM',
             inputSchema: {
               type: 'object',
               properties: {
                 url: {
                   type: 'string',
                   description: 'The URL to navigate to',
+                },
+                extractionMode: {
+                  type: 'string',
+                  description: 'readability_markdown or raw_dom_sanitized',
+                },
+                includeWarnings: {
+                  type: 'boolean',
+                  description: 'Whether to include prompt-injection warnings',
                 },
               },
               required: ['url'],
@@ -91,6 +122,93 @@ export class TabNabMCPServer {
             },
           },
           {
+            name: 'keyboard_type',
+            description: 'Type text into the active page using the keyboard',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                text: {
+                  type: 'string',
+                  description: 'Text to type',
+                },
+              },
+              required: ['text'],
+            },
+          },
+          {
+            name: 'press_key',
+            description: 'Press a keyboard key on the active page',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                key: {
+                  type: 'string',
+                  description: 'Key to press (e.g., Enter, Escape)',
+                },
+              },
+              required: ['key'],
+            },
+          },
+          {
+            name: 'wait_for_selector',
+            description: 'Wait for a selector to appear on the active page',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                selector: {
+                  type: 'string',
+                  description: 'CSS selector to wait for',
+                },
+                timeoutMs: {
+                  type: 'number',
+                  description: 'Timeout in milliseconds',
+                },
+              },
+              required: ['selector'],
+            },
+          },
+          {
+            name: 'wait_for_navigation',
+            description: 'Wait for navigation to complete',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                timeoutMs: {
+                  type: 'number',
+                  description: 'Timeout in milliseconds',
+                },
+                waitUntil: {
+                  type: 'string',
+                  description: 'load, domcontentloaded, or networkidle',
+                },
+              },
+              required: [],
+            },
+          },
+          {
+            name: 'query_selector_all',
+            description: 'Query multiple elements and return their text and attributes',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                selector: {
+                  type: 'string',
+                  description: 'CSS selector to query',
+                },
+                attributes: {
+                  type: 'array',
+                  description: 'Attributes to extract from each element',
+                  items: { type: 'string' },
+                },
+                maxItems: {
+                  type: 'number',
+                  description: 'Maximum number of items to return',
+                },
+              },
+              required: ['selector'],
+            },
+          },
+          {
             name: 'screenshot_tab',
             description: 'Take a screenshot of the current tab',
             inputSchema: {
@@ -105,6 +223,33 @@ export class TabNabMCPServer {
                   description: 'Optional file path to save the screenshot',
                 },
               },
+              required: [],
+            },
+          },
+          {
+            name: 'confirm_action',
+            description: 'Confirm or cancel a pending action',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                confirmationToken: {
+                  type: 'string',
+                  description: 'Token from a needs_confirmation response',
+                },
+                action: {
+                  type: 'string',
+                  description: 'confirm or cancel',
+                },
+              },
+              required: ['confirmationToken'],
+            },
+          },
+          {
+            name: 'reset_session',
+            description: 'Reset the session step counter and pending confirmations',
+            inputSchema: {
+              type: 'object',
+              properties: {},
               required: [],
             },
           },
@@ -129,9 +274,37 @@ export class TabNabMCPServer {
               ],
             };
           }
+          case 'list_tabs': {
+            const result = await this.tools.listTabs();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+          case 'activate_tab': {
+            const result = await this.tools.activateTab(args as { tabId: string });
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
 
           case 'navigate_and_extract': {
-            const result = await this.tools.navigateAndExtract(args as { url: string });
+            const result = await this.tools.navigateAndExtract(
+              args as {
+                url: string;
+                extractionMode?: 'readability_markdown' | 'raw_dom_sanitized';
+                includeWarnings?: boolean;
+              }
+            );
             return {
               content: [
                 {
@@ -165,6 +338,67 @@ export class TabNabMCPServer {
               ],
             };
           }
+          case 'keyboard_type': {
+            const result = await this.tools.keyboardType(args as { text: string });
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+          case 'press_key': {
+            const result = await this.tools.pressKey(args as { key: string });
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+          case 'wait_for_selector': {
+            const result = await this.tools.waitForSelector(
+              args as { selector: string; timeoutMs?: number }
+            );
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+          case 'wait_for_navigation': {
+            const result = await this.tools.waitForNavigation(
+              args as { timeoutMs?: number; waitUntil?: 'load' | 'domcontentloaded' | 'networkidle' }
+            );
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+          case 'query_selector_all': {
+            const result = await this.tools.querySelectorAll(
+              args as { selector: string; attributes?: string[]; maxItems?: number }
+            );
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
 
           case 'screenshot_tab': {
             const screenshotArgs = args || {};
@@ -172,6 +406,30 @@ export class TabNabMCPServer {
               fullPage: (screenshotArgs as { fullPage?: boolean }).fullPage ?? false,
               path: (screenshotArgs as { path?: string }).path,
             });
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+          case 'confirm_action': {
+            const result = await this.tools.confirmAction(
+              args as { confirmationToken: string; action?: 'confirm' | 'cancel' }
+            );
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+          case 'reset_session': {
+            const result = await this.tools.resetSession();
             return {
               content: [
                 {

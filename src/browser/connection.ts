@@ -1,4 +1,4 @@
-import puppeteer, { type Browser, type Page } from 'puppeteer-core';
+import { chromium, type Browser, type Page } from 'playwright';
 
 export class BrowserConnection {
   private browser: Browser | null = null;
@@ -9,15 +9,12 @@ export class BrowserConnection {
   }
 
   async connect(): Promise<Browser> {
-    if (this.browser?.connected) {
+    if (this.browser?.isConnected()) {
       return this.browser;
     }
 
     try {
-      this.browser = await puppeteer.connect({
-        browserURL: `http://localhost:${this.debugPort}`,
-        defaultViewport: null,
-      });
+      this.browser = await chromium.connectOverCDP(`http://localhost:${this.debugPort}`);
 
       return this.browser;
     } catch (error) {
@@ -31,7 +28,7 @@ export class BrowserConnection {
 
   async getActiveTab(): Promise<Page> {
     const browser = await this.connect();
-    const pages = await browser.pages();
+    const pages = await this.getAllTabs();
 
     if (pages.length === 0) {
       throw new Error('No tabs found in the browser');
@@ -45,17 +42,18 @@ export class BrowserConnection {
 
   async getAllTabs(): Promise<Page[]> {
     const browser = await this.connect();
-    return browser.pages();
+    const contexts = browser.contexts();
+    return contexts.flatMap((context) => context.pages());
   }
 
   async disconnect(): Promise<void> {
     if (this.browser) {
-      await this.browser.disconnect();
+      await this.browser.close();
       this.browser = null;
     }
   }
 
   isConnected(): boolean {
-    return this.browser?.connected ?? false;
+    return this.browser?.isConnected() ?? false;
   }
 }
